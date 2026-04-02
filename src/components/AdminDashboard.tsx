@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import BannersTab from './admin/BannersTab';
+import UsersTab from './admin/UsersTab';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('gifts');
@@ -51,23 +53,29 @@ export default function AdminDashboard() {
         </h1>
       </div>
 
-      <div className="flex overflow-x-auto bg-white border-b border-gray-200 hide-scrollbar">
+      <div className="flex flex-wrap bg-white border-b border-gray-200">
         <TabButton active={activeTab === 'gifts'} onClick={() => setActiveTab('gifts')} icon={<Plus size={18} />} label="إضافة هدية" />
         <TabButton active={activeTab === 'games'} onClick={() => setActiveTab('games')} icon={<Gamepad2 size={18} />} label="الألعاب (هدايا الحظ)" />
+        <TabButton active={activeTab === 'store'} onClick={() => setActiveTab('store')} icon={<ShoppingBag size={18} />} label="المتجر (إطارات)" />
         <TabButton active={activeTab === 'icons'} onClick={() => setActiveTab('icons')} icon={<ImageIcon size={18} />} label="بنك الأيقونات" />
         <TabButton active={activeTab === 'giftBox'} onClick={() => setActiveTab('giftBox')} icon={<Gift size={18} />} label="صندوق الهدايا" />
         <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
         <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
+        <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
+        <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<List size={18} />} label="سجلات الدخول" />
         <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<List size={18} />} label="سجل العمليات" />
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'gifts' && <AddGiftTab />}
         {activeTab === 'games' && <GamesTab />}
+        {activeTab === 'store' && <StoreTab />}
         {activeTab === 'icons' && <IconsBankTab />}
         {activeTab === 'giftBox' && <GiftBoxTab />}
         {activeTab === 'diamonds' && <DiamondsTab />}
         {activeTab === 'mics' && <MicsTab />}
+        {activeTab === 'banners' && <BannersTab />}
+        {activeTab === 'users' && <UsersTab />}
         {activeTab === 'logs' && <LogsTab />}
       </div>
     </div>
@@ -85,6 +93,164 @@ function TabButton({ active, onClick, icon, label }: any) {
       {icon}
       <span className="text-sm">{label}</span>
     </button>
+  );
+}
+
+function StoreTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [price, setPrice] = useState('');
+  const [type, setType] = useState('mic_frame');
+  const [filterType, setFilterType] = useState('all');
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [audioUrl, setAudioUrl] = useState('');
+  const [duration, setDuration] = useState('4');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'store_items'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAddItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !imageUrl || !price) return alert('الرجاء تعبئة جميع الحقول الأساسية');
+    
+    setIsSaving(true);
+    try {
+      const itemData: any = {
+        name,
+        imageUrl,
+        price: Number(price),
+        type,
+        timestamp: Date.now()
+      };
+
+      if (type === 'entrance') {
+        itemData.isFullScreen = isFullScreen;
+        itemData.audioUrl = audioUrl;
+        itemData.duration = Number(duration) || 4;
+      }
+
+      await addDoc(collection(db, 'store_items'), itemData);
+      
+      setName('');
+      setImageUrl('');
+      setPrice('');
+      setAudioUrl('');
+      setIsFullScreen(false);
+      setDuration('4');
+      alert('تم إضافة العنصر بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا العنصر؟')) {
+      await deleteDoc(doc(db, 'store_items', id));
+    }
+  };
+
+  const itemTypes = [
+    { id: 'mic_frame', label: 'إطار مايك' },
+    { id: 'mic_icon', label: 'شكل مايك' },
+    { id: 'entrance', label: 'دخولية' },
+    { id: 'chat_bubble', label: 'فقاعة دردشة' },
+    { id: 'text_color', label: 'لون كتابة' }
+  ];
+
+  const filteredItems = filterType === 'all' ? items : items.filter(item => item.type === filterType);
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4">إضافة عنصر جديد للمتجر</h2>
+        <form onSubmit={handleAddItem} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">نوع العنصر</label>
+            <select value={type} onChange={e => setType(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white">
+              {itemTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">اسم العنصر</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: إطار ذهبي" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {type === 'text_color' ? 'كود اللون (مثال: #FF0000)' : 'رابط الصورة / التأثير (PNG شفاف أو GIF)'}
+            </label>
+            <input type={type === 'text_color' ? 'text' : 'url'} value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder={type === 'text_color' ? '#...' : 'https://...'} dir="ltr" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">السعر (بالألماس)</label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: 500" />
+          </div>
+          
+          {type === 'entrance' && (
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-bold text-sm text-gray-800">إعدادات الدخولية</h4>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="isFullScreen" checked={isFullScreen} onChange={e => setIsFullScreen(e.target.checked)} className="w-4 h-4 text-purple-600 rounded" />
+                <label htmlFor="isFullScreen" className="text-sm text-gray-700">ملء الشاشة بالكامل (بدون نصوص)</label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">رابط الصوت (اختياري)</label>
+                <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://... (MP3/WAV)" dir="ltr" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">مدة العرض (بالثواني)</label>
+                <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" min="1" max="15" />
+              </div>
+            </div>
+          )}
+
+          <button type="submit" disabled={isSaving} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
+            {isSaving ? 'جاري الإضافة...' : 'إضافة العنصر'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold">العناصر الحالية</h2>
+          <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-1 text-sm bg-white">
+            <option value="all">الكل</option>
+            {itemTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {filteredItems.map(item => (
+            <div key={item.id} className="border border-gray-200 rounded-xl p-4 flex flex-col items-center relative">
+              <button onClick={() => handleDelete(item.id)} className="absolute top-2 right-2 text-red-500 hover:bg-red-50 p-1 rounded-md transition z-20">
+                <Trash2 size={16} />
+              </button>
+              <div className="w-16 h-16 bg-gray-100 rounded-full mb-3 relative flex items-center justify-center overflow-hidden">
+                {item.type === 'text_color' ? (
+                  <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
+                ) : (
+                  <img src={item.imageUrl} alt={item.name} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
+                )}
+                {item.type === 'mic_frame' && <Mic size={20} className="text-gray-400" />}
+              </div>
+              <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 mb-1">
+                {itemTypes.find(t => t.id === item.type)?.label || item.type}
+              </span>
+              <h3 className="font-bold text-sm text-center">{item.name}</h3>
+              <p className="text-yellow-600 font-bold text-xs mt-1">{item.price} 💎</p>
+            </div>
+          ))}
+          {filteredItems.length === 0 && <p className="text-gray-500 text-sm col-span-full text-center py-4">لا توجد عناصر مضافة حالياً</p>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -197,6 +363,8 @@ function AddGiftTab() {
   const [duration, setDuration] = useState('6');
   const [hasAnimation, setHasAnimation] = useState(true);
   const [animationSize, setAnimationSize] = useState('normal');
+  const [category, setCategory] = useState('classic');
+  const [giftEffect, setGiftEffect] = useState('none');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddGift = async (e: React.FormEvent) => {
@@ -215,11 +383,12 @@ function AddGiftTab() {
         duration: Number(duration),
         hasAnimation,
         animationSize,
-        category: 'classic',
+        category,
+        giftEffect,
         createdAt: new Date().toISOString()
       });
       alert('تم إضافة الهدية بنجاح!');
-      setName(''); setDescription(''); setImageUrl(''); setLink(''); setAudioUrl(''); setValue(''); setDuration('6'); setHasAnimation(true); setAnimationSize('normal');
+      setName(''); setDescription(''); setImageUrl(''); setLink(''); setAudioUrl(''); setValue(''); setDuration('6'); setHasAnimation(true); setAnimationSize('normal'); setCategory('classic'); setGiftEffect('none');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
     } finally {
@@ -231,9 +400,18 @@ function AddGiftTab() {
     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
       <h2 className="text-lg font-bold mb-4 text-gray-800">إضافة هدية جديدة</h2>
       <form onSubmit={handleAddGift} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">اسم الهدية</label>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">اسم الهدية</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">قسم الهدية</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+              <option value="classic">كلاسيك (عادية)</option>
+              <option value="lucky">هدايا الحظ</option>
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
@@ -261,13 +439,27 @@ function AddGiftTab() {
             <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" />
           </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">حجم تأثير الهدية على الشاشة (الأنيميشن)</label>
-          <select value={animationSize} onChange={e => setAnimationSize(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none">
-            <option value="normal">عادي (متوسط في المنتصف)</option>
-            <option value="large">كبير (يأخذ مساحة أكبر)</option>
-            <option value="fullscreen">شاشة كاملة (يملأ الغرفة بالكامل)</option>
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">حجم تأثير الهدية على الشاشة (الأنيميشن)</label>
+            <select value={animationSize} onChange={e => setAnimationSize(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+              <option value="normal">عادي (متوسط في المنتصف)</option>
+              <option value="large">كبير (يأخذ مساحة أكبر)</option>
+              <option value="fullscreen">شاشة كاملة (يملأ الغرفة بالكامل)</option>
+            </select>
+          </div>
+          {category === 'lucky' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">تأثير حركة الهدية (CSS Effect)</label>
+              <select value={giftEffect} onChange={e => setGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                <option value="none">بدون تأثير إضافي</option>
+                <option value="shake">اهتزاز (Shake)</option>
+                <option value="pulse">نبض (Pulse)</option>
+                <option value="spin">دوران (Spin)</option>
+                <option value="bounce">قفز (Bounce)</option>
+              </select>
+            </div>
+          )}
         </div>
         <div>
           <label className="flex items-center gap-2 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition">
@@ -520,11 +712,11 @@ function MicsTab() {
 
   useEffect(() => {
     // Listen to global mic settings
-    const unsubSettings = onSnapshot(doc(db, 'system', 'mic_settings'), (doc) => {
-      if (doc.exists()) {
-        setSettings(doc.data() as any);
+    const unsubSettings = onSnapshot(doc(db, 'system', 'mic_settings'), (snapshot: any) => {
+      if (snapshot.exists()) {
+        setSettings(snapshot.data() as any);
       } else {
-        setDoc(doc.ref, { maxMics: 3, allowMovement: true });
+        setDoc(snapshot.ref, { maxMics: 8, allowMovement: true });
       }
     });
 
@@ -541,7 +733,7 @@ function MicsTab() {
           });
         }
       } else {
-        const micsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const micsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
         setMics(micsData.sort((a, b) => a.order - b.order));
         setLoading(false);
       }
@@ -619,6 +811,7 @@ function MicsTab() {
           >
             <option value={3}>3 مايكات</option>
             <option value={5}>5 مايكات</option>
+            <option value={8}>8 مايكات</option>
             <option value={9}>9 مايكات</option>
             <option value={12}>جميع المايكات (12)</option>
           </select>

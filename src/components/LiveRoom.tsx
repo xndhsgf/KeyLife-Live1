@@ -1,18 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function LiveRoom({ onClose }: { onClose: () => void }) {
+export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: string, onClose: () => void, onMinimize?: () => void }) {
   const { user } = useAuth();
   const [showAdminTools, setShowAdminTools] = useState(false);
   const [showGiftModal, setShowGiftModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showMallModal, setShowMallModal] = useState(false);
+  const [showLuckyBoxModal, setShowLuckyBoxModal] = useState(false);
+  const [mallCategory, setMallCategory] = useState('mic_frame');
+  const [selectedProfile, setSelectedProfile] = useState<any>(null);
   
-  const [settings, setSettings] = useState({ maxMics: 12, allowMovement: true });
+  const [settings, setSettings] = useState({ maxMics: 8, allowMovement: true });
   const [mics, setMics] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
+  const [storeItems, setStoreItems] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   
@@ -23,17 +29,38 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
   const [giftCategory, setGiftCategory] = useState<'classic' | 'lucky'>('classic');
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [userDiamonds, setUserDiamonds] = useState(0);
+  const [equippedItems, setEquippedItems] = useState<any>({});
+  const [showEntrance, setShowEntrance] = useState<string | null>(null);
+  const [hasShownEntrance, setHasShownEntrance] = useState(false);
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
   const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string}>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const mountTime = useRef(Date.now());
 
   // Fetch data
   useEffect(() => {
     if (!user) return;
 
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), (doc) => {
-      if (doc.exists()) setUserDiamonds(doc.data().diamonds || 0);
+      if (doc.exists()) {
+        const data = doc.data();
+        setUserDiamonds(data.diamonds || 0);
+        setEquippedItems({
+          mic_frame: data.equippedMicFrame,
+          mic_icon: data.equippedMicIcon,
+          entrance: data.equippedEntrance,
+          chat_bubble: data.equippedBubble,
+          text_color: data.equippedTextColor
+        });
+        
+        if (data.equippedEntrance && !hasShownEntrance) {
+          setShowEntrance(data.equippedEntrance);
+          setHasShownEntrance(true);
+          const duration = data.equippedEntrance.duration ? data.equippedEntrance.duration * 1000 : 4000;
+          setTimeout(() => setShowEntrance(null), duration);
+        }
+      }
     });
 
     const unsubAppIcons = onSnapshot(doc(db, 'settings', 'app_icons'), (doc) => {
@@ -41,16 +68,18 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
     });
 
     const unsubSettings = onSnapshot(doc(db, 'system', 'mic_settings'), (doc) => {
-      if (doc.exists()) setSettings(doc.data() as any);
+      if (doc.exists()) {
+        setSettings(doc.data() as any);
+      }
     });
 
-    const unsubMics = onSnapshot(collection(db, 'mics'), async (snapshot) => {
+    const unsubMics = onSnapshot(collection(db, 'rooms', roomId, 'mics'), async (snapshot) => {
       if (snapshot.empty) {
         for (let i = 0; i < 12; i++) {
-          await setDoc(doc(db, 'mics', `mic_${i}`), { order: i, userId: null, status: 'open' });
+          await setDoc(doc(db, 'rooms', roomId, 'mics', `mic_${i}`), { order: i, userId: null, status: 'open' });
         }
       } else {
-        const micsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const micsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
         setMics(micsData.sort((a, b) => a.order - b.order));
       }
     });
@@ -59,19 +88,31 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
       setGifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const qChat = query(collection(db, 'room_chat'), orderBy('timestamp', 'desc'), limit(30));
+    const unsubStore = onSnapshot(collection(db, 'store_items'), (snapshot) => {
+      setStoreItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const qChat = query(collection(db, 'rooms', roomId, 'room_chat'), orderBy('timestamp', 'desc'), limit(30));
     const unsubChat = onSnapshot(qChat, (snapshot) => {
-      setChatMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).reverse());
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).reverse();
+      // Filter out gift messages that were sent before the user joined the room
+      const filteredMessages = messages.filter(msg => {
+        if (msg.isSystemGift) {
+          return msg.timestamp >= mountTime.current;
+        }
+        return true;
+      });
+      setChatMessages(filteredMessages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
 
-    const now = Date.now();
-    const qEvents = query(collection(db, 'room_events'), orderBy('timestamp', 'desc'), limit(2));
+    const qEvents = query(collection(db, 'rooms', roomId, 'room_events'), orderBy('timestamp', 'desc'), limit(2));
     const unsubEvents = onSnapshot(qEvents, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
           const event = change.doc.data();
-          if (event.timestamp > now - 5000) { // Only show recent events
+          // Only show events that happened after the component mounted AND within the last 5 seconds
+          if (event.timestamp > mountTime.current && event.timestamp > Date.now() - 5000) {
             if (event.type === 'gift') {
               setActiveGiftEvent(event);
               setTimeout(() => {
@@ -86,7 +127,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
       });
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubChat(); unsubEvents(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); };
   }, [user]);
 
   const handleMicClick = async (mic: any) => {
@@ -100,24 +141,29 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
     if (isOccupied) {
       if (mic.userId === user.uid) {
         if (window.confirm('هل تريد النزول من المايك؟')) {
-          await updateDoc(doc(db, 'mics', mic.id), { userId: null, userAvatar: null, userName: null });
+          await updateDoc(doc(db, 'rooms', roomId, 'mics', mic.id), { userId: null, userAvatar: null, userName: null, userMicFrame: null, userMicIcon: null });
         }
       } else {
-        setSelectedReceiver(mic.userId);
-        setShowGiftModal(true);
+        setSelectedProfile({ uid: mic.userId, name: mic.userName, avatar: mic.userAvatar });
       }
       return;
     }
 
     if (myCurrentMic) {
       if (!settings.allowMovement) return alert('التنقل بين المايكات غير مسموح حالياً');
-      await updateDoc(doc(db, 'mics', myCurrentMic.id), { userId: null, userAvatar: null, userName: null });
+      await updateDoc(doc(db, 'rooms', roomId, 'mics', myCurrentMic.id), { userId: null, userAvatar: null, userName: null, userMicFrame: null, userMicIcon: null });
     }
     
-    await updateDoc(doc(db, 'mics', mic.id), { 
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const equippedFrame = userDoc.exists() ? userDoc.data().equippedMicFrame : null;
+    const equippedIcon = userDoc.exists() ? userDoc.data().equippedMicIcon : null;
+
+    await updateDoc(doc(db, 'rooms', roomId, 'mics', mic.id), { 
       userId: user.uid, 
       userAvatar: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
-      userName: user.displayName || 'مستخدم'
+      userName: user.displayName || 'مستخدم',
+      userMicFrame: equippedFrame || null,
+      userMicIcon: equippedIcon || null
     });
   };
 
@@ -125,10 +171,12 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     if (!chatInput.trim() || !user) return;
     
-    await addDoc(collection(db, 'room_chat'), {
+    await addDoc(collection(db, 'rooms', roomId, 'room_chat'), {
       text: chatInput,
       userId: user.uid,
       userName: user.displayName || 'مستخدم',
+      userBubble: equippedItems.chat_bubble || null,
+      userTextColor: equippedItems.text_color || null,
       timestamp: Date.now()
     });
     setChatInput('');
@@ -173,7 +221,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
         });
 
         if (gift.hasAnimation !== false) {
-          transaction.set(doc(collection(db, 'room_events')), {
+          transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
             type: 'gift', 
             senderName: user!.displayName || 'مستخدم', 
             receiverName: receiverDoc.data().displayName || 'مستخدم', 
@@ -188,7 +236,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
         }
 
         if (isWin && winAmount >= 100000) {
-          transaction.set(doc(collection(db, 'room_events')), {
+          transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
             type: 'lucky_jackpot',
             userName: user!.displayName || 'مستخدم',
             amount: winAmount,
@@ -202,7 +250,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
           chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
         }
 
-        transaction.set(doc(collection(db, 'room_chat')), {
+        transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
           text: chatText,
           userId: user!.uid,
           userName: user!.displayName || 'مستخدم',
@@ -242,9 +290,37 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 text-white flex justify-center font-sans h-[100dvh]" dir="rtl">
-      <div className="w-full max-w-md h-[100dvh] relative overflow-hidden bg-[url('https://picsum.photos/seed/roombg/800/1200')] bg-cover bg-center">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+    <div className="fixed inset-0 z-50 bg-gray-950 text-white flex justify-center font-sans h-[100dvh]" dir="rtl">
+      <div className="w-full max-w-md h-[100dvh] relative overflow-hidden bg-gradient-to-b from-indigo-950 via-purple-950 to-black">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20"></div>
+        <div className="absolute inset-0 bg-black/40"></div>
+
+        {/* Entrance Animation Overlay */}
+        <AnimatePresence>
+          {showEntrance && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className={`absolute z-[120] pointer-events-none flex justify-center ${showEntrance.isFullScreen ? 'inset-0' : 'top-1/4 left-0 right-0'}`}
+            >
+              {showEntrance.audioUrl && <audio autoPlay src={showEntrance.audioUrl} />}
+              <div className="relative w-full h-full flex justify-center items-center">
+                <img 
+                  src={showEntrance.imageUrl} 
+                  alt="Entrance" 
+                  className={showEntrance.isFullScreen ? "w-full h-full object-cover" : "w-80 h-80 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"} 
+                />
+                {!showEntrance.isFullScreen && (
+                  <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-4 py-1.5 rounded-full border border-yellow-500/50 whitespace-nowrap">
+                    <span className="text-yellow-400 font-bold text-sm">✨ {user?.displayName} دخل الغرفة ✨</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 100k Jackpot Banner */}
         <AnimatePresence>
@@ -304,15 +380,21 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                   ? { animate: { scale: [1.05, 1] }, transition: { duration: 0.5 } }
                   : { animate: { scale: [0.8, 1.2, 1] }, transition: { duration: 0.5 } };
 
+                let effectClass = "";
+                if (activeGiftEvent.giftEffect === 'shake') effectClass = "animate-[shake_0.5s_ease-in-out_infinite]";
+                if (activeGiftEvent.giftEffect === 'pulse') effectClass = "animate-pulse";
+                if (activeGiftEvent.giftEffect === 'spin') effectClass = "animate-[spin_2s_linear_infinite]";
+                if (activeGiftEvent.giftEffect === 'bounce') effectClass = "animate-bounce";
+
                 return (
                   <>
                     {activeGiftEvent.giftAudioUrl && (
                       <audio autoPlay src={activeGiftEvent.giftAudioUrl} />
                     )}
                     {isVideo ? (
-                      <motion.video autoPlay loop muted playsInline src={mediaUrl} className={mediaClass} {...animationProps} />
+                      <motion.video autoPlay loop muted playsInline src={mediaUrl} className={`${mediaClass} ${effectClass}`} {...animationProps} />
                     ) : (
-                      <motion.img src={mediaUrl} className={mediaClass} {...animationProps} />
+                      <motion.img src={mediaUrl} className={`${mediaClass} ${effectClass}`} {...animationProps} />
                     )}
                   </>
                 );
@@ -340,29 +422,39 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
             </div>
             
             <div className="flex items-center gap-2">
-              <button onClick={onClose} className="p-1.5 bg-black/40 rounded-full backdrop-blur-md">
+              <button onClick={() => setShowExitModal(true)} className="p-1.5 bg-black/40 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <X size={18} />
               </button>
             </div>
           </div>
 
           {/* Seats Grid */}
-          <div className="flex-1 px-4 py-4 overflow-y-auto hide-scrollbar">
+          <div className="px-4 py-2 shrink-0">
             <div className="grid grid-cols-4 gap-y-6 gap-x-4">
               {mics.slice(0, settings.maxMics).map((mic, i) => (
                 <div key={mic.id} onClick={() => handleMicClick(mic)} className="flex flex-col items-center relative cursor-pointer group">
                   <div className="relative">
-                    <div className={`w-14 h-14 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-white/20 bg-black/40'}`}>
+                    <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'}`}>
                       {mic.userId ? (
-                        <img src={mic.userAvatar} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                        <>
+                          <img src={mic.userAvatar} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                          {mic.userMicFrame && (
+                            <img src={mic.userMicFrame} className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none scale-125" />
+                          )}
+                          {mic.userMicIcon && (
+                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center border border-gray-700 z-20">
+                              <img src={mic.userMicIcon} className="w-4 h-4 object-contain" />
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden">
                           {mic.status === 'locked' ? (
-                            <ShieldBan size={20} className="text-red-400/50" />
+                            <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full"><ShieldBan size={20} className="text-red-400/50" /></div>
                           ) : appIcons.micIcon ? (
-                            <img src={appIcons.micIcon} alt="Mic" className="w-full h-full object-cover opacity-50" />
+                            <img src={appIcons.micIcon} alt="Mic" className="w-full h-full object-contain drop-shadow-md" />
                           ) : (
-                            <Mic size={20} className="text-white/30" />
+                            <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full"><Mic size={20} className="text-white/30" /></div>
                           )}
                         </div>
                       )}
@@ -379,15 +471,23 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Chat Area */}
-          <div className="h-56 px-4 overflow-y-auto flex flex-col pb-2 space-y-2 mask-image-to-top relative">
+          <div className="flex-1 px-4 overflow-y-auto flex flex-col pb-2 space-y-2 mask-image-to-top relative [&::-webkit-scrollbar]:hidden">
             <div className="bg-black/30 w-fit px-3 py-1.5 rounded-xl backdrop-blur-sm mb-2">
               <span className="text-yellow-400 text-xs font-bold mr-1">النظام:</span>
               <span className="text-xs text-gray-200">مرحباً بك في الغرفة! الرجاء الالتزام بالقوانين.</span>
             </div>
             {chatMessages.map(msg => (
-              <div key={msg.id} className={`w-fit max-w-[80%] px-3 py-1.5 rounded-xl backdrop-blur-sm break-words ${msg.isSystemGift ? 'bg-pink-500/30 border border-pink-500/50' : 'bg-black/30'}`}>
-                <span className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1`}>{msg.userName}:</span>
-                <span className="text-xs text-white">{msg.text}</span>
+              <div 
+                key={msg.id} 
+                className={`w-fit max-w-[80%] px-3 py-1.5 rounded-xl backdrop-blur-sm break-words relative ${msg.isSystemGift ? 'bg-pink-500/30 border border-pink-500/50' : msg.userBubble ? 'bg-transparent' : 'bg-black/30'}`}
+              >
+                {msg.userBubble && !msg.isSystemGift && (
+                  <img src={msg.userBubble} className="absolute inset-0 w-full h-full object-fill z-0 rounded-xl opacity-90 pointer-events-none" />
+                )}
+                <div className="relative z-10">
+                  <span className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1`}>{msg.userName}:</span>
+                  <span className="text-xs" style={{ color: msg.userTextColor || 'white' }}>{msg.text}</span>
+                </div>
               </div>
             ))}
             <div ref={chatEndRef} />
@@ -450,13 +550,14 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                   setSelectedReceiver(firstUserOnMic.userId);
                 }
                 setShowGiftModal(true);
-              }} className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 transition">
+              }} className="hover:scale-110 transition active:scale-95 drop-shadow-2xl">
                 {appIcons.giftBoxIcon ? (
-                  <img src={appIcons.giftBoxIcon} alt="Gift" className="w-5 h-5 object-contain" />
+                  <img src={appIcons.giftBoxIcon} alt="Gift" className="w-12 h-12 object-contain" />
                 ) : (
-                  <Gift size={18} />
+                  <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center shadow-lg shadow-pink-500/50">
+                    <Gift size={24} className="text-white" />
+                  </div>
                 )}
-                صندوق الهدايا
               </button>
             </div>
           </div>
@@ -592,8 +693,8 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
               <h3 className="text-center font-bold mb-6 text-gray-200">أدوات الغرفة</h3>
               <div className="grid grid-cols-4 gap-y-6 gap-x-4">
                 {[
-                  { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400' },
-                  { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400' },
+                  { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
+                  { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
                   { icon: <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
                   { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400' },
@@ -601,13 +702,286 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                   { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
                   { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
                 ].map((tool, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-2 cursor-pointer">
+                  <div key={idx} onClick={tool.action} className="flex flex-col items-center gap-2 cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center ${tool.color}`}>
                       {tool.icon}
                     </div>
                     <span className="text-[10px] text-gray-400 text-center">{tool.label}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Exit/Minimize Modal */}
+        {showExitModal && (
+          <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-gray-900 rounded-3xl p-6 w-full max-w-xs text-center border border-gray-800 shadow-2xl">
+              <h3 className="text-lg font-bold text-white mb-6">ماذا تريد أن تفعل؟</h3>
+              <div className="space-y-3">
+                {onMinimize && (
+                  <button onClick={() => { setShowExitModal(false); onMinimize(); }} className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 transition text-white rounded-xl font-bold">
+                    تصغير الغرفة
+                  </button>
+                )}
+                <button onClick={async () => {
+                  if (user) {
+                    const myMic = mics.find(m => m.userId === user.uid);
+                    if (myMic) await updateDoc(doc(db, 'rooms', roomId, 'mics', myMic.id), { userId: null, userAvatar: null, userName: null });
+                    
+                    // Check if user is owner and mark room as inactive
+                    const roomDoc = await getDoc(doc(db, 'rooms', roomId));
+                    if (roomDoc.exists() && roomDoc.data().ownerId === user.uid) {
+                      await updateDoc(doc(db, 'rooms', roomId), { active: false });
+                    }
+                  }
+                  onClose();
+                }} className="w-full py-3.5 bg-red-500/10 hover:bg-red-500/20 transition text-red-500 rounded-xl font-bold">
+                  الخروج من الغرفة
+                </button>
+                <button onClick={() => setShowExitModal(false)} className="w-full py-3.5 text-gray-400 hover:text-white transition font-bold">
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mall Modal */}
+        {showMallModal && (
+          <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowMallModal(false)}>
+            <div className="bg-gray-900 w-full rounded-t-3xl p-6 border-t border-gray-800 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)] h-[80%]" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/5">
+                  <span className="text-yellow-400 font-bold text-sm">{userDiamonds}</span>
+                  <span className="text-xs text-gray-300">💎 رصيدك</span>
+                </div>
+                <h3 className="text-xl font-bold text-white">المتجر</h3>
+                <button onClick={() => setShowMallModal(false)} className="text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+              </div>
+
+              {/* Mall Tabs */}
+              <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-4 pb-2">
+                {[
+                  { id: 'mic_frame', label: 'إطارات المايك' },
+                  { id: 'mic_icon', label: 'أشكال المايك' },
+                  { id: 'entrance', label: 'دخوليات' },
+                  { id: 'chat_bubble', label: 'فقاعات' },
+                  { id: 'text_color', label: 'كتابة ملونة' },
+                  { id: 'bag', label: 'الحقيبة 🎒' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setMallCategory(tab.id)}
+                    className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                      mallCategory === tab.id 
+                        ? 'bg-purple-600 text-white' 
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="overflow-y-auto h-[calc(100%-130px)] hide-scrollbar pb-10">
+                {mallCategory === 'bag' ? (
+                  <div className="grid grid-cols-3 gap-4">
+                    {Object.entries(equippedItems).filter(([_, value]) => value).map(([type, value]: [string, any]) => {
+                      const typeLabels: any = {
+                        mic_frame: 'إطار مايك',
+                        mic_icon: 'شكل مايك',
+                        entrance: 'دخولية',
+                        chat_bubble: 'فقاعة',
+                        text_color: 'كتابة ملونة'
+                      };
+                      const imageUrl = type === 'entrance' ? value.imageUrl : value;
+                      return (
+                        <div key={type} className="bg-gray-800/50 border border-purple-500/30 rounded-2xl p-3 flex flex-col items-center relative">
+                          <div className="absolute top-2 right-2 bg-purple-500 text-white text-[8px] px-2 py-0.5 rounded-full">
+                            مستخدم حالياً
+                          </div>
+                          <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 mt-2 relative flex items-center justify-center overflow-hidden">
+                            {type === 'text_color' ? (
+                              <div className="w-full h-full" style={{ backgroundColor: imageUrl }}></div>
+                            ) : (
+                              <img src={imageUrl} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${type === 'mic_frame' ? 'scale-125' : ''}`} />
+                            )}
+                            {type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
+                            {type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
+                          </div>
+                          <h4 className="text-white text-xs font-bold text-center mb-1">{typeLabels[type]}</h4>
+                        </div>
+                      );
+                    })}
+                    {Object.values(equippedItems).filter(v => v).length === 0 && (
+                      <div className="col-span-3 text-center text-gray-400 py-10">الحقيبة فارغة</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    {storeItems.filter(item => item.type === mallCategory).map(item => (
+                    <div key={item.id} className="bg-gray-800/50 border border-gray-700 rounded-2xl p-3 flex flex-col items-center relative">
+                      <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 relative flex items-center justify-center overflow-hidden">
+                        {item.type === 'text_color' ? (
+                          <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
+                        ) : (
+                          <img src={item.imageUrl} alt={item.name} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
+                        )}
+                        {item.type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
+                        {item.type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
+                      </div>
+                      <h4 className="text-white text-xs font-bold text-center mb-1">{item.name}</h4>
+                      <p className="text-yellow-400 text-[10px] font-bold mb-3">{item.price} 💎</p>
+                      <button 
+                        onClick={async () => {
+                          if (!user) return;
+                          if (userDiamonds < item.price) return alert('رصيدك لا يكفي');
+                          if (window.confirm(`هل تريد شراء ${item.name} بـ ${item.price} ماسة؟`)) {
+                            try {
+                              const updateData: any = { diamonds: userDiamonds - item.price };
+                              if (item.type === 'mic_frame') updateData.equippedMicFrame = item.imageUrl;
+                              if (item.type === 'mic_icon') updateData.equippedMicIcon = item.imageUrl;
+                              if (item.type === 'entrance') updateData.equippedEntrance = {
+                                imageUrl: item.imageUrl,
+                                isFullScreen: item.isFullScreen,
+                                audioUrl: item.audioUrl,
+                                duration: item.duration
+                              };
+                              if (item.type === 'chat_bubble') updateData.equippedBubble = item.imageUrl;
+                              if (item.type === 'text_color') updateData.equippedTextColor = item.imageUrl;
+
+                              await updateDoc(doc(db, 'users', user.uid), updateData);
+                              
+                              // Update mic if currently on it and it's a mic frame
+                              if (item.type === 'mic_frame') {
+                                const myMic = mics.find(m => m.userId === user.uid);
+                                if (myMic) {
+                                  await updateDoc(doc(db, 'rooms', roomId, 'mics', myMic.id), { userMicFrame: item.imageUrl });
+                                }
+                              }
+                              alert('تم الشراء والتركيب بنجاح!');
+                            } catch (e: any) {
+                              alert('خطأ: ' + e.message);
+                            }
+                          }
+                        }}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] py-1.5 rounded-lg font-bold hover:scale-105 transition"
+                      >
+                        شراء وتركيب
+                      </button>
+                    </div>
+                  ))}
+                  {storeItems.filter(item => item.type === mallCategory).length === 0 && (
+                    <div className="col-span-3 text-center text-gray-400 py-10">لا توجد عناصر متاحة حالياً في هذا القسم</div>
+                  )}
+                </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lucky Box Modal */}
+        {showLuckyBoxModal && (
+          <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowLuckyBoxModal(false)}>
+            <div className="bg-gradient-to-b from-gray-900 to-black w-full max-w-sm rounded-3xl p-6 border border-yellow-500/30 relative shadow-[0_0_50px_rgba(234,179,8,0.2)] text-center" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setShowLuckyBoxModal(false)} className="absolute top-4 left-4 text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+              
+              <div className="w-24 h-24 mx-auto mb-6 relative">
+                <div className="absolute inset-0 bg-yellow-500/20 blur-xl rounded-full animate-pulse"></div>
+                <Gift size={96} className="text-yellow-400 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)] relative z-10" />
+              </div>
+              
+              <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mb-2">صندوق الحظ</h3>
+              <p className="text-gray-400 text-sm mb-8">افتح الصندوق لفرصة ربح ألماس مضاعف أو هدايا نادرة!</p>
+              
+              <div className="flex justify-center gap-4 mb-6">
+                <div className="bg-black/50 border border-white/10 px-4 py-2 rounded-xl">
+                  <span className="text-xs text-gray-400 block mb-1">رصيدك</span>
+                  <span className="text-yellow-400 font-bold">{userDiamonds} 💎</span>
+                </div>
+                <div className="bg-black/50 border border-white/10 px-4 py-2 rounded-xl">
+                  <span className="text-xs text-gray-400 block mb-1">سعر الفتح</span>
+                  <span className="text-pink-400 font-bold">100 💎</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={async () => {
+                  if (!user) return;
+                  if (userDiamonds < 100) return alert('رصيدك لا يكفي');
+                  
+                  try {
+                    // Simple random logic for lucky box
+                    const isWin = Math.random() > 0.6; // 40% chance to win
+                    const winAmount = isWin ? Math.floor(Math.random() * 400) + 50 : 0; // Win 50-450
+                    
+                    await updateDoc(doc(db, 'users', user.uid), {
+                      diamonds: userDiamonds - 100 + winAmount
+                    });
+                    
+                    if (isWin) {
+                      alert(`مبروك! 🎉 لقد ربحت ${winAmount} ماسة!`);
+                    } else {
+                      alert(`حظ أوفر المرة القادمة 😢`);
+                    }
+                  } catch (e: any) {
+                    alert('خطأ: ' + e.message);
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white py-4 rounded-2xl font-black text-lg shadow-[0_0_20px_rgba(234,179,8,0.4)] hover:scale-105 active:scale-95 transition-all"
+              >
+                افتح الصندوق الآن
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* User Profile Modal */}
+        {selectedProfile && (
+          <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProfile(null)}>
+            <div className="bg-gray-900 w-full rounded-t-3xl p-6 border-t border-gray-800 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setSelectedProfile(null)} className="absolute top-4 left-4 text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+              
+              <div className="flex flex-col items-center -mt-12 mb-4">
+                <img src={selectedProfile.avatar} className="w-24 h-24 rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
+                <h3 className="text-xl font-bold text-white mt-2">{selectedProfile.name}</h3>
+                <p className="text-xs text-gray-400 mt-1">ID: {selectedProfile.uid.substring(0,8)}</p>
+              </div>
+              
+              <div className="flex justify-center gap-4 mb-6">
+                <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
+                  <p className="text-[10px] text-gray-400 mb-1">مستوى الدعم</p>
+                  <p className="text-yellow-400 font-bold flex items-center gap-1 justify-center"><Crown size={14}/> Lv.12</p>
+                </div>
+                <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
+                  <p className="text-[10px] text-gray-400 mb-1">مستوى الشحن</p>
+                  <p className="text-blue-400 font-bold flex items-center gap-1 justify-center"><Diamond size={14}/> Lv.8</p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 mb-6 min-h-[80px]">
+                <p className="text-[10px] text-gray-400 mb-3">الأوسمة</p>
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg"><Star size={18} className="text-white"/></div>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg"><ShieldBan size={18} className="text-white"/></div>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg"><TrendingUp size={18} className="text-white"/></div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button onClick={() => {
+                  setSelectedReceiver(selectedProfile.uid);
+                  setSelectedProfile(null);
+                  setShowGiftModal(true);
+                }} className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-pink-500/30">
+                  إرسال هدية
+                </button>
+                <button className="flex-1 bg-gray-800 hover:bg-gray-700 transition text-white py-3.5 rounded-xl font-bold border border-gray-700">
+                  متابعة
+                </button>
               </div>
             </div>
           </div>

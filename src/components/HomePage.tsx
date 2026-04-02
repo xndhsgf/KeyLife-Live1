@@ -1,7 +1,39 @@
-import { Search, Bell, Flame, Users, MapPin, Radio } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Bell, Flame, Users, MapPin, Radio, Mic } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 
-export default function HomePage({ onOpenRoom }: { onOpenRoom: () => void }) {
+export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => void }) {
   const tabs = ['مشهور', 'متابع', 'سوريا', 'البث'];
+  const [activeRooms, setActiveRooms] = useState<any[]>([]);
+  const [banners, setBanners] = useState<any[]>([]);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+
+  useEffect(() => {
+    const q = query(collection(db, 'rooms'), where('active', '==', true));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      rooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setActiveRooms(rooms);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'banners'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setBanners(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBannerIndex(prev => (prev + 1) % banners.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [banners.length]);
 
   return (
     <div className="flex flex-col min-h-full bg-gray-50">
@@ -30,20 +62,41 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: () => void }) {
 
       <div className="p-4 space-y-6">
         {/* Banners */}
-        <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-          <div className="min-w-[280px] h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-4 text-white flex flex-col justify-center relative overflow-hidden shadow-md">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-            <h3 className="text-lg font-bold mb-1 z-10">خدمة الداعمين</h3>
-            <p className="text-xs opacity-90 z-10">احصل على مميزات حصرية الآن!</p>
-            <button className="mt-3 bg-white/20 hover:bg-white/30 transition text-white text-xs py-1.5 px-4 rounded-full w-fit backdrop-blur-sm z-10">
-              اكتشف المزيد
-            </button>
+        {banners.length > 0 ? (
+          <div className="relative w-full h-32 rounded-xl overflow-hidden shadow-md">
+            {banners.map((banner, idx) => (
+              <a 
+                key={banner.id} 
+                href={banner.linkUrl || '#'} 
+                target={banner.linkUrl ? "_blank" : "_self"}
+                rel="noreferrer"
+                className={`absolute inset-0 transition-opacity duration-500 ${idx === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+              >
+                <img src={banner.imageUrl} alt="Banner" className="w-full h-full object-cover" />
+              </a>
+            ))}
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-20">
+              {banners.map((_, idx) => (
+                <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === currentBannerIndex ? 'bg-white' : 'bg-white/50'}`} />
+              ))}
+            </div>
           </div>
-          <div className="min-w-[280px] h-32 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl p-4 text-white flex flex-col justify-center relative overflow-hidden shadow-md">
-            <h3 className="text-lg font-bold mb-1">Lucky Gift 🎁</h3>
-            <p className="text-xs opacity-90">اربح هدايا مضاعفة في غرف البث</p>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+            <div className="min-w-[280px] h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-4 text-white flex flex-col justify-center relative overflow-hidden shadow-md">
+              <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+              <h3 className="text-lg font-bold mb-1 z-10">خدمة الداعمين</h3>
+              <p className="text-xs opacity-90 z-10">احصل على مميزات حصرية الآن!</p>
+              <button className="mt-3 bg-white/20 hover:bg-white/30 transition text-white text-xs py-1.5 px-4 rounded-full w-fit backdrop-blur-sm z-10">
+                اكتشف المزيد
+              </button>
+            </div>
+            <div className="min-w-[280px] h-32 bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl p-4 text-white flex flex-col justify-center relative overflow-hidden shadow-md">
+              <h3 className="text-lg font-bold mb-1">Lucky Gift 🎁</h3>
+              <p className="text-xs opacity-90">اربح هدايا مضاعفة في غرف البث</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Categories */}
         <div className="flex gap-4">
@@ -70,33 +123,39 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: () => void }) {
         {/* Room Grid */}
         <div>
           <h2 className="text-sm font-bold text-gray-800 mb-3">غرف نشطة الآن</h2>
-          <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} onClick={onOpenRoom} className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition">
-                <div className="relative h-36">
-                  <img src={`https://picsum.photos/seed/room${i}/200/200`} alt="Room cover" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                    1.2k
+          {activeRooms.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3">
+              {activeRooms.map(room => (
+                <div 
+                  key={room.id} 
+                  onClick={() => onOpenRoom(room.id)}
+                  className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative"
+                >
+                  <div className="h-32 bg-gray-200 relative">
+                    <img src={room.ownerAvatar} alt={room.ownerName} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-full text-white text-[10px]">
+                      <Radio size={10} className="text-green-400 animate-pulse" />
+                      مباشر
+                    </div>
                   </div>
-                  <div className="absolute bottom-2 right-2 flex -space-x-2 space-x-reverse">
-                    <img src={`https://picsum.photos/seed/user${i}a/30/30`} className="w-6 h-6 rounded-full border border-white" referrerPolicy="no-referrer" />
-                    <img src={`https://picsum.photos/seed/user${i}b/30/30`} className="w-6 h-6 rounded-full border border-white" referrerPolicy="no-referrer" />
-                  </div>
-                </div>
-                <div className="p-2">
-                  <h3 className="text-xs font-bold truncate">سهرة طرب ووناسة 🎵</h3>
-                  <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-500">
-                    <MapPin size={10} />
-                    <span>سوريا</span>
-                    <span className="mx-1">•</span>
-                    <Radio size={10} className="text-purple-500" />
-                    <span className="text-purple-600 font-medium">15k ماسة</span>
+                  <div className="p-2">
+                    <p className="text-xs font-bold text-gray-800 truncate">{room.ownerName}</p>
+                    <p className="text-[10px] text-gray-500 truncate">غرفة دردشة</p>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <Radio size={48} className="mb-3 text-gray-300" />
+              <p className="text-gray-500 text-sm font-medium">لا توجد غرف نشطة حالياً</p>
+              <button onClick={() => onOpenRoom()} className="mt-4 bg-purple-100 hover:bg-purple-200 text-purple-600 transition-colors px-6 py-2.5 rounded-full text-sm font-bold flex items-center gap-2">
+                <Mic size={18} />
+                إنشاء غرفة عامة
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
