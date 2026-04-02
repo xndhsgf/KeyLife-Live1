@@ -1,0 +1,127 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { User, onAuthStateChanged, updateProfile } from 'firebase/auth';
+import { auth, loginWithGoogle, loginWithEmail as firebaseLoginWithEmail, signupWithEmail as firebaseSignupWithEmail, logout as firebaseLogout, db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  signupWithEmail: (email: string, pass: string) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUserProfile: (displayName: string, photoURL: string) => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // Ensure user document exists in Firestore
+        const userRef = doc(db, 'users', currentUser.uid);
+        try {
+          const docSnap = await getDoc(userRef);
+          const isMasterAdmin = currentUser.email === 'admin@cocco.com' || currentUser.email === 'iejehdgdig@gmail.com';
+          
+          if (!docSnap.exists()) {
+            await setDoc(userRef, {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName || (isMasterAdmin ? 'المدير العام' : 'مستخدم جديد'),
+              photoURL: currentUser.photoURL || '',
+              diamonds: isMasterAdmin ? 999999 : 0,
+              role: isMasterAdmin ? 'admin' : 'user',
+              createdAt: new Date().toISOString()
+            });
+          } else if (isMasterAdmin && docSnap.data().role !== 'admin') {
+            // Ensure master admin always has admin role
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+          }
+        } catch (error) {
+          console.error("Error creating user document:", error);
+        }
+      }
+      
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  const login = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (error) {
+      console.error("Login failed", error);
+      throw error;
+    }
+  };
+
+  const loginWithEmail = async (email: string, pass: string) => {
+    try {
+      await firebaseLoginWithEmail(email, pass);
+    } catch (error) {
+      console.error("Email login failed", error);
+      throw error;
+    }
+  };
+
+  const signupWithEmail = async (email: string, pass: string) => {
+    try {
+      await firebaseSignupWithEmail(email, pass);
+    } catch (error) {
+      console.error("Email signup failed", error);
+      throw error;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await firebaseLogout();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  const updateUserProfile = async (displayName: string, photoURL: string) => {
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, { displayName, photoURL });
+      await auth.currentUser.reload();
+      
+      // Update in Firestore
+      try {
+        const userRef = doc(db, 'users', auth.currentUser.uid);
+        await setDoc(userRef, { displayName, photoURL }, { merge: true });
+      } catch (error) {
+        console.error("Error updating user in Firestore:", error);
+      }
+
+      // Force state update to reflect changes immediately by creating a new object with all necessary properties
+      setUser({ 
+        ...auth.currentUser, 
+        uid: auth.currentUser.uid, 
+        email: auth.currentUser.email, 
+        displayName: displayName, 
+        photoURL: photoURL 
+      } as any);
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, loginWithEmail, signupWithEmail, logout, updateUserProfile }}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
+};
