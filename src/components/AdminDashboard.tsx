@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw } from 'lucide-react';
-import { db } from '../firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2 } from 'lucide-react';
+import { db, storage } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
 import BannersTab from './admin/BannersTab';
 import UsersTab from './admin/UsersTab';
@@ -67,6 +68,7 @@ export default function AdminDashboard() {
         <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
         <TabButton active={activeTab === 'cp'} onClick={() => setActiveTab('cp')} icon={<Users size={18} />} label="إعدادات الـ CP" />
         <TabButton active={activeTab === 'backgrounds'} onClick={() => setActiveTab('backgrounds')} icon={<ImageIcon size={18} />} label="خلفيات الغرف" />
+        <TabButton active={activeTab === 'myAccount'} onClick={() => setActiveTab('myAccount')} icon={<Users size={18} />} label="حسابي (المدير)" />
         <TabButton active={activeTab === 'reset'} onClick={() => setActiveTab('reset')} icon={<RefreshCw size={18} />} label="إعادة تعيين الحساب" />
         <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<List size={18} />} label="سجلات الدخول" />
         <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<List size={18} />} label="سجل العمليات" />
@@ -83,6 +85,7 @@ export default function AdminDashboard() {
         {activeTab === 'banners' && <BannersTab />}
         {activeTab === 'cp' && <CPTab />}
         {activeTab === 'backgrounds' && <RoomBackgroundsTab />}
+        {activeTab === 'myAccount' && <MyAdminAccountTab />}
         {activeTab === 'reset' && <AdminResetTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'logs' && <LogsTab />}
@@ -116,6 +119,9 @@ function StoreTab() {
   const [audioUrl, setAudioUrl] = useState('');
   const [duration, setDuration] = useState('4');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'image' | 'audio'>('image');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'store_items'), orderBy('timestamp', 'desc'));
@@ -124,6 +130,28 @@ function StoreTab() {
     });
     return () => unsub();
   }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'image' | 'audio' = 'image') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = target === 'audio' ? 'store_audio' : `store_items/${type}`;
+      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      if (target === 'audio') setAudioUrl(downloadURL);
+      else setImageUrl(downloadURL);
+      
+      if (!name) setName(file.name.split('.')[0]);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +200,8 @@ function StoreTab() {
     { id: 'mic_icon', label: 'شكل مايك' },
     { id: 'entrance', label: 'دخولية' },
     { id: 'chat_bubble', label: 'فقاعة دردشة' },
-    { id: 'text_color', label: 'لون كتابة' }
+    { id: 'text_color', label: 'لون كتابة' },
+    { id: 'room_background', label: 'خلفية غرفة' }
   ];
 
   const filteredItems = filterType === 'all' ? items : items.filter(item => item.type === filterType);
@@ -182,21 +211,63 @@ function StoreTab() {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-bold mb-4">إضافة عنصر جديد للمتجر</h2>
         <form onSubmit={handleAddItem} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">نوع العنصر</label>
-            <select value={type} onChange={e => setType(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white">
-              {itemTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">نوع العنصر</label>
+              <select value={type} onChange={e => setType(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white">
+                {itemTypes.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">اسم العنصر</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: إطار ذهبي" />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">اسم العنصر</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: إطار ذهبي" />
+
+          <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => handleFileUpload(e, uploadTarget)}
+              accept={uploadTarget === 'audio' ? "audio/*" : (type === 'room_background' || type === 'entrance' ? "image/*,video/*" : "image/*")}
+              className="hidden"
+            />
+            {isUploading ? (
+              <>
+                <Loader2 size={24} className="text-purple-600 animate-spin" />
+                <span className="text-sm text-gray-600">جاري الرفع...</span>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setUploadTarget('image'); setTimeout(() => fileInputRef.current?.click(), 0); }}
+                  className="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50 transition shadow-sm"
+                >
+                  <Upload size={18} className="text-purple-600" />
+                  رفع ملف من الجهاز
+                </button>
+                <span className="text-[10px] text-gray-400">يمكنك رفع صور أو فيديوهات MP4 حسب نوع العنصر</span>
+              </>
+            )}
+            {imageUrl && (
+              <div className="mt-2 w-full max-w-[200px] aspect-video rounded-lg overflow-hidden border border-gray-200 bg-black">
+                {imageUrl.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                  <video src={imageUrl} className="w-full h-full object-cover" autoPlay muted loop />
+                ) : (
+                  <img src={imageUrl} className="w-full h-full object-cover" />
+                )}
+              </div>
+            )}
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {type === 'text_color' ? 'كود اللون (مثال: #FF0000)' : 'رابط الصورة / التأثير (PNG شفاف أو GIF)'}
+              {type === 'text_color' ? 'كود اللون (مثال: #FF0000)' : 
+               type === 'room_background' ? 'رابط الخلفية (صورة أو فيديو MP4)' : 
+               'رابط الصورة / التأثير (PNG شفاف أو GIF)'}
             </label>
-            <input type={type === 'text_color' ? 'text' : 'url'} value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder={type === 'text_color' ? '#...' : 'https://...'} dir="ltr" />
+            <input type={type === 'text_color' ? 'text' : 'url'} value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2 text-left" dir="ltr" placeholder={type === 'text_color' ? '#...' : 'https://...'} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">السعر (بالألماس)</label>
@@ -212,7 +283,11 @@ function StoreTab() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">رابط الصوت (اختياري)</label>
-                <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://... (MP3/WAV)" dir="ltr" />
+                <div className="flex gap-2">
+                  <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-left" dir="ltr" placeholder="https://... (MP3/WAV)" />
+                  <button type="button" onClick={() => { setUploadTarget('audio'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+                </div>
+                {audioUrl && <audio controls src={audioUrl} className="mt-2 w-full h-8" />}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">مدة العرض (بالثواني)</label>
@@ -221,7 +296,7 @@ function StoreTab() {
             </div>
           )}
 
-          <button type="submit" disabled={isSaving} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
+          <button type="submit" disabled={isSaving || isUploading} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
             {isSaving ? 'جاري الإضافة...' : 'إضافة العنصر'}
           </button>
         </form>
@@ -375,6 +450,32 @@ function AddGiftTab() {
   const [category, setCategory] = useState('classic');
   const [giftEffect, setGiftEffect] = useState('none');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<'image' | 'animation' | 'audio'>('image');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = uploadTarget === 'audio' ? 'gift_audio' : 'gift_animations';
+      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      if (uploadTarget === 'image') setImageUrl(downloadURL);
+      else if (uploadTarget === 'animation') setLink(downloadURL);
+      else if (uploadTarget === 'audio') setAudioUrl(downloadURL);
+      
+      if (!name) setName(file.name.split('.')[0]);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleAddGift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -428,16 +529,61 @@ function AddGiftTab() {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط صورة الهدية (الأيقونة التي تظهر في الصندوق)</label>
-          <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('image'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط تأثير الهدية (MP4, GIF, PNG - اختياري)</label>
-          <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="إذا تركته فارغاً سيتم استخدام صورة الهدية للأنيميشن" className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="إذا تركته فارغاً سيتم استخدام صورة الهدية للأنيميشن" className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('animation'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط صوت الهدية (MP3, WAV - اختياري)</label>
-          <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} placeholder="رابط ملف صوتي يعمل عند رمي الهدية" className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} placeholder="رابط ملف صوتي يعمل عند رمي الهدية" className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('audio'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
+
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileUpload} 
+          accept={uploadTarget === 'audio' ? "audio/*" : (uploadTarget === 'animation' ? "image/*,video/*" : "image/*")} 
+          className="hidden" 
+        />
+        
+        {isUploading && (
+          <div className="flex items-center gap-2 text-purple-600 text-sm font-bold bg-purple-50 p-2 rounded-lg">
+            <Loader2 size={16} className="animate-spin" />
+            جاري رفع الملف...
+          </div>
+        )}
+
+        {(imageUrl || link) && (
+          <div className="flex gap-4 mt-2">
+            {imageUrl && (
+              <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                <img src={imageUrl} className="w-full h-full object-contain" />
+                <p className="text-[8px] text-center bg-black/50 text-white py-0.5">الأيقونة</p>
+              </div>
+            )}
+            {link && (
+              <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-black">
+                {link.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                  <video src={link} className="w-full h-full object-contain" autoPlay muted loop />
+                ) : (
+                  <img src={link} className="w-full h-full object-contain" />
+                )}
+                <p className="text-[8px] text-center bg-black/50 text-white py-0.5">التأثير</p>
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">قيمة الهدية (ألماس)</label>
@@ -494,9 +640,36 @@ function GamesTab() {
   const [duration, setDuration] = useState('6');
   const [winProbability, setWinProbability] = useState('20');
   const [winMultiplier, setWinMultiplier] = useState('5');
+  const [giftEffect, setGiftEffect] = useState('normal');
   const [hasAnimation, setHasAnimation] = useState(true);
   const [animationSize, setAnimationSize] = useState('normal');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<'image' | 'animation' | 'audio'>('image');
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = uploadTarget === 'audio' ? 'gift_audio' : 'gift_animations';
+      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      if (uploadTarget === 'image') setImageUrl(downloadURL);
+      else if (uploadTarget === 'animation') setLink(downloadURL);
+      else if (uploadTarget === 'audio') setAudioUrl(downloadURL);
+      
+      if (!name) setName(file.name.split('.')[0]);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const [bigWinConfig, setBigWinConfig] = useState({ threshold: 1000, audioUrl: '' });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
@@ -540,6 +713,7 @@ function GamesTab() {
         duration: Number(duration),
         winProbability: Number(winProbability),
         winMultiplier: Number(winMultiplier),
+        giftEffect,
         hasAnimation,
         animationSize,
         category: 'lucky',
@@ -547,7 +721,7 @@ function GamesTab() {
       });
       alert('تم إضافة هدية الحظ بنجاح!');
       setName(''); setDescription(''); setImageUrl(''); setLink(''); setAudioUrl(''); setValue(''); setDuration('6');
-      setWinProbability('20'); setWinMultiplier('5'); setHasAnimation(true); setAnimationSize('normal');
+      setWinProbability('20'); setWinMultiplier('5'); setGiftEffect('normal'); setHasAnimation(true); setAnimationSize('normal');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
     } finally {
@@ -589,16 +763,61 @@ function GamesTab() {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط صورة الهدية (الأيقونة التي تظهر في الصندوق)</label>
-          <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('image'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط تأثير الهدية (MP4, GIF, PNG - اختياري)</label>
-          <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="إذا تركته فارغاً سيتم استخدام صورة الهدية للأنيميشن" className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="إذا تركته فارغاً سيتم استخدام صورة الهدية للأنيميشن" className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('animation'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط صوت الهدية (MP3, WAV - اختياري)</label>
-          <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} placeholder="رابط ملف صوتي يعمل عند رمي الهدية" className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          <div className="flex gap-2">
+            <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} placeholder="رابط ملف صوتي يعمل عند رمي الهدية" className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+            <button type="button" onClick={() => { setUploadTarget('audio'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+          </div>
         </div>
+
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileUpload} 
+          accept={uploadTarget === 'audio' ? "audio/*" : (uploadTarget === 'animation' ? "image/*,video/*" : "image/*")} 
+          className="hidden" 
+        />
+        
+        {isUploading && (
+          <div className="flex items-center gap-2 text-purple-600 text-sm font-bold bg-purple-50 p-2 rounded-lg">
+            <Loader2 size={16} className="animate-spin" />
+            جاري رفع الملف...
+          </div>
+        )}
+
+        {(imageUrl || link) && (
+          <div className="flex gap-4 mt-2">
+            {imageUrl && (
+              <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                <img src={imageUrl} className="w-full h-full object-contain" />
+                <p className="text-[8px] text-center bg-black/50 text-white py-0.5">الأيقونة</p>
+              </div>
+            )}
+            {link && (
+              <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-black">
+                {link.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                  <video src={link} className="w-full h-full object-contain" autoPlay muted loop />
+                ) : (
+                  <img src={link} className="w-full h-full object-contain" />
+                )}
+                <p className="text-[8px] text-center bg-black/50 text-white py-0.5">التأثير</p>
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">قيمة الهدية (ألماس)</label>
@@ -618,6 +837,17 @@ function GamesTab() {
           <label className="block text-sm font-medium text-gray-700 mb-1">مضاعف الربح (عند الفوز)</label>
           <input type="number" value={winMultiplier} onChange={e => setWinMultiplier(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" step="0.1" />
           <p className="text-[10px] text-gray-500 mt-1">مثال: 5 يعني إذا فاز المستخدم سيربح (قيمة الهدية × 5)</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">تأثير الهدية (للهدايا الحظ)</label>
+          <select value={giftEffect} onChange={e => setGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none">
+            <option value="normal">عادي (تكبير وتصغير)</option>
+            <option value="shake">اهتزازي (Shaking)</option>
+            <option value="pulse">نبضي (Pulse)</option>
+            <option value="spin">دوران (Spin)</option>
+            <option value="bounce">قفز (Bounce)</option>
+            <option value="zoom_mic">زوم على المايك (Zoom to Mic)</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">حجم تأثير الهدية على الشاشة (الأنيميشن)</label>
@@ -645,6 +875,47 @@ function GamesTab() {
 function GiftBoxTab() {
   const [gifts, setGifts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingGift, setEditingGift] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<'image' | 'animation' | 'audio'>('image');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = uploadTarget === 'audio' ? 'gift_audio' : 'gift_animations';
+      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      if (uploadTarget === 'image') setEditImageUrl(downloadURL);
+      else if (uploadTarget === 'animation') setEditLink(downloadURL);
+      else if (uploadTarget === 'audio') setEditAudioUrl(downloadURL);
+      
+      if (!editName) setEditName(file.name.split('.')[0]);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Edit form states
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [editLink, setEditLink] = useState('');
+  const [editAudioUrl, setEditAudioUrl] = useState('');
+  const [editValue, setEditValue] = useState('');
+  const [editDuration, setEditDuration] = useState('6');
+  const [editHasAnimation, setEditHasAnimation] = useState(true);
+  const [editAnimationSize, setEditAnimationSize] = useState('normal');
+  const [editCategory, setEditCategory] = useState('classic');
+  const [editGiftEffect, setEditGiftEffect] = useState('none');
 
   useEffect(() => {
     const fetchGifts = async () => {
@@ -661,6 +932,58 @@ function GiftBoxTab() {
     fetchGifts();
   }, []);
 
+  const handleEditClick = (gift: any) => {
+    setEditingGift(gift);
+    setEditName(gift.name || '');
+    setEditDescription(gift.description || '');
+    setEditImageUrl(gift.imageUrl || '');
+    setEditLink(gift.link || '');
+    setEditAudioUrl(gift.audioUrl || '');
+    setEditValue(gift.value?.toString() || '');
+    setEditDuration(gift.duration?.toString() || '6');
+    setEditHasAnimation(gift.hasAnimation !== false);
+    setEditAnimationSize(gift.animationSize || 'normal');
+    setEditCategory(gift.category || 'classic');
+    setEditGiftEffect(gift.giftEffect || 'none');
+  };
+
+  const handleUpdateGift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGift) return;
+    if (!editName || !editValue) return alert('يرجى إدخال اسم وقيمة الهدية');
+
+    setIsSaving(true);
+    try {
+      const giftRef = doc(db, 'gifts', editingGift.id);
+      const updatedData = {
+        name: editName,
+        description: editDescription,
+        imageUrl: editImageUrl,
+        link: editLink,
+        audioUrl: editAudioUrl,
+        value: Number(editValue),
+        duration: Number(editDuration),
+        hasAnimation: editHasAnimation,
+        animationSize: editAnimationSize,
+        category: editCategory,
+        giftEffect: editGiftEffect,
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(giftRef, updatedData);
+      
+      // Update local state
+      setGifts(gifts.map(g => g.id === editingGift.id ? { ...g, ...updatedData } : g));
+      
+      alert('تم تحديث الهدية بنجاح!');
+      setEditingGift(null);
+    } catch (error: any) {
+      alert('خطأ في التحديث: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (window.confirm('هل أنت متأكد من حذف هذه الهدية؟')) {
       try {
@@ -676,6 +999,142 @@ function GiftBoxTab() {
 
   return (
     <div className="space-y-4">
+      {editingGift && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl my-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">تعديل الهدية: {editingGift.name}</h3>
+              <button onClick={() => setEditingGift(null)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <X size={24} className="text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateGift} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">اسم الهدية</label>
+                  <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">قسم الهدية</label>
+                  <select value={editCategory} onChange={e => setEditCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                    <option value="classic">كلاسيك (عادية)</option>
+                    <option value="lucky">هدايا الحظ</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
+                <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" rows={2} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">رابط صورة الهدية</label>
+                <div className="flex gap-2">
+                  <input type="url" value={editImageUrl} onChange={e => setEditImageUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+                  <button type="button" onClick={() => { setUploadTarget('image'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">رابط تأثير الهدية (اختياري)</label>
+                <div className="flex gap-2">
+                  <input type="url" value={editLink} onChange={e => setEditLink(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+                  <button type="button" onClick={() => { setUploadTarget('animation'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">رابط صوت الهدية (اختياري)</label>
+                <div className="flex gap-2">
+                  <input type="url" value={editAudioUrl} onChange={e => setEditAudioUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+                  <button type="button" onClick={() => { setUploadTarget('audio'); fileInputRef.current?.click(); }} className="bg-gray-100 px-3 rounded-lg hover:bg-gray-200 transition"><Upload size={18} /></button>
+                </div>
+              </div>
+
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+                accept={uploadTarget === 'audio' ? "audio/*" : (uploadTarget === 'animation' ? "image/*,video/*" : "image/*")} 
+                className="hidden" 
+              />
+              
+              {isUploading && (
+                <div className="flex items-center gap-2 text-purple-600 text-sm font-bold bg-purple-50 p-2 rounded-lg">
+                  <Loader2 size={16} className="animate-spin" />
+                  جاري رفع الملف...
+                </div>
+              )}
+
+              {(editImageUrl || editLink) && (
+                <div className="flex gap-4 mt-2">
+                  {editImageUrl && (
+                    <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                      <img src={editImageUrl} className="w-full h-full object-contain" />
+                      <p className="text-[8px] text-center bg-black/50 text-white py-0.5">الأيقونة</p>
+                    </div>
+                  )}
+                  {editLink && (
+                    <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden bg-black">
+                      {editLink.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                        <video src={editLink} className="w-full h-full object-contain" autoPlay muted loop />
+                      ) : (
+                        <img src={editLink} className="w-full h-full object-contain" />
+                      )}
+                      <p className="text-[8px] text-center bg-black/50 text-white py-0.5">التأثير</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">قيمة الهدية (ألماس)</label>
+                  <input type="number" value={editValue} onChange={e => setEditValue(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="0" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">مدة الظهور (ثواني)</label>
+                  <input type="number" value={editDuration} onChange={e => setEditDuration(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">حجم الأنيميشن</label>
+                  <select value={editAnimationSize} onChange={e => setEditAnimationSize(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                    <option value="normal">عادي</option>
+                    <option value="large">كبير</option>
+                    <option value="fullscreen">شاشة كاملة</option>
+                  </select>
+                </div>
+                {editCategory === 'lucky' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">تأثير حركة الهدية</label>
+                    <select value={editGiftEffect} onChange={e => setEditGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                      <option value="none">بدون تأثير</option>
+                      <option value="shake">اهتزاز</option>
+                      <option value="pulse">نبض</option>
+                      <option value="spin">دوران</option>
+                      <option value="bounce">قفز</option>
+                      <option value="zoom_mic">زوم على المايك</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <input type="checkbox" id="editHasAnimation" checked={editHasAnimation} onChange={e => setEditHasAnimation(e.target.checked)} className="w-4 h-4 text-purple-600 rounded" />
+                <label htmlFor="editHasAnimation" className="text-sm font-bold text-gray-700 cursor-pointer">تفعيل الأنيميشن عند الإرسال</label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button type="submit" disabled={isSaving} className="flex-1 bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 transition disabled:opacity-50">
+                  {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                </button>
+                <button type="button" onClick={() => setEditingGift(null)} className="flex-1 bg-gray-100 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-200 transition">
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {gifts.length === 0 ? (
         <div className="text-center text-gray-500 py-8">لا توجد هدايا مضافة بعد.</div>
       ) : (
@@ -685,10 +1144,15 @@ function GiftBoxTab() {
             <div className="flex-1">
               <h3 className="font-bold text-gray-800">{gift.name}</h3>
               <p className="text-xs text-gray-500 line-clamp-1">{gift.description}</p>
-              <div className="text-sm font-bold text-purple-600 mt-1">{gift.value} 💎</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm font-bold text-purple-600">{gift.value} 💎</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${gift.category === 'lucky' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+                  {gift.category === 'lucky' ? 'حظ' : 'كلاسيك'}
+                </span>
+              </div>
             </div>
             <div className="flex flex-col gap-2">
-              <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition"><Edit2 size={18} /></button>
+              <button onClick={() => handleEditClick(gift)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition"><Edit2 size={18} /></button>
               <button onClick={() => handleDelete(gift.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 size={18} /></button>
             </div>
           </div>
@@ -929,6 +1393,147 @@ function MicsTab() {
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MyAdminAccountTab() {
+  const { user } = useAuth();
+  const [adminData, setAdminData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form states
+  const [name, setName] = useState('');
+  const [numericId, setNumericId] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [addDiamonds, setAddDiamonds] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setAdminData(data);
+        setName(data.displayName || '');
+        setNumericId(data.numericId || '');
+        setPhotoURL(data.photoURL || '');
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [user]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        displayName: name,
+        numericId: numericId,
+        photoURL: photoURL
+      });
+      alert('تم تحديث الملف الشخصي بنجاح!');
+    } catch (error: any) {
+      alert('خطأ في التحديث: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddDiamonds = async () => {
+    if (!user || !addDiamonds) return;
+    const amount = Number(addDiamonds);
+    if (isNaN(amount) || amount <= 0) return alert('يرجى إدخال كمية صحيحة');
+
+    setIsSaving(true);
+    try {
+      const currentDiamonds = adminData.diamonds || 0;
+      await updateDoc(doc(db, 'users', user.uid), {
+        diamonds: currentDiamonds + amount
+      });
+      
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        amount: amount,
+        type: 'admin_self_recharge',
+        status: 'success',
+        timestamp: new Date().toISOString()
+      });
+
+      alert(`تم إضافة ${amount} ألماس بنجاح!`);
+      setAddDiamonds('');
+    } catch (error: any) {
+      alert('خطأ في إضافة الألماس: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center text-gray-500">جاري تحميل بيانات الحساب...</div>;
+  if (!adminData) return <div className="p-8 text-center text-red-500">تعذر العثور على بيانات الحساب.</div>;
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex items-center gap-4 mb-6">
+          <img src={adminData.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} alt="" className="w-20 h-20 rounded-full object-cover border-4 border-purple-100" />
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">{adminData.displayName || 'المدير'}</h2>
+            <p className="text-sm text-gray-500">رتبة: <span className="text-purple-600 font-bold">مسؤول (Admin)</span></p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-yellow-600 font-bold">{adminData.diamonds || 0} 💎</span>
+              <span className="text-gray-400 text-xs">| ID: {adminData.numericId || '---'}</span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleUpdateProfile} className="space-y-4 border-t border-gray-100 pt-6">
+          <h3 className="font-bold text-gray-800 mb-2">تعديل بيانات الحساب</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الاسم المستعار</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الآي دي (Numeric ID)</label>
+              <input type="text" value={numericId} onChange={e => setNumericId(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none font-mono" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط الصورة الشخصية</label>
+            <input type="url" value={photoURL} onChange={e => setPhotoURL(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
+          </div>
+          <button type="submit" disabled={isSaving} className="w-full bg-purple-600 text-white font-bold py-2 rounded-lg hover:bg-purple-700 transition disabled:opacity-50">
+            {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <Diamond className="text-yellow-500" size={20} />
+          شحن رصيدي (ألماس)
+        </h3>
+        <div className="flex gap-2">
+          <input 
+            type="number" 
+            value={addDiamonds} 
+            onChange={e => setAddDiamonds(e.target.value)} 
+            placeholder="أدخل الكمية لإضافتها لرصيدك..." 
+            className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 outline-none"
+          />
+          <button 
+            onClick={handleAddDiamonds} 
+            disabled={isSaving || !addDiamonds}
+            className="bg-yellow-500 text-white font-bold px-6 py-2 rounded-lg hover:bg-yellow-600 transition disabled:opacity-50"
+          >
+            إضافة
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-500 mt-2">ملاحظة: يمكنك إضافة أي كمية من الألماس لحسابك كمسؤول.</p>
       </div>
     </div>
   );

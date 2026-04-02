@@ -36,7 +36,7 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   
-  const [activeGiftEvent, setActiveGiftEvent] = useState<any>(null);
+  const [activeGiftEvents, setActiveGiftEvents] = useState<any[]>([]);
   const [activeJackpotEvent, setActiveJackpotEvent] = useState<any>(null);
   const [selectedReceiver, setSelectedReceiver] = useState<string | null>(null);
   const [selectedGift, setSelectedGift] = useState<any>(null);
@@ -44,35 +44,41 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [userDiamonds, setUserDiamonds] = useState(0);
   const [equippedItems, setEquippedItems] = useState<any>({});
-  const [showEntrance, setShowEntrance] = useState<string | null>(null);
+  const [showEntrance, setShowEntrance] = useState<any>(null);
   const [hasShownEntrance, setHasShownEntrance] = useState(false);
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
   const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string}>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const mountTime = useRef(Date.now());
 
   // Fetch data
   useEffect(() => {
     if (!user) return;
 
-    const unsubUser = onSnapshot(doc(db, 'users', user.uid), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
+    const unsubUser = onSnapshot(doc(db, 'users', user.uid), async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
         setUserDiamonds(data.diamonds || 0);
         setEquippedItems({
           mic_frame: data.equippedMicFrame,
           mic_icon: data.equippedMicIcon,
           entrance: data.equippedEntrance,
           chat_bubble: data.equippedBubble,
-          text_color: data.equippedTextColor
+          text_color: data.equippedTextColor,
+          room_background: data.equippedBackground
         });
         
         if (data.equippedEntrance && !hasShownEntrance) {
-          setShowEntrance(data.equippedEntrance);
+          // Add to room_events so others can see it
+          await addDoc(collection(db, 'rooms', roomId, 'room_events'), {
+            type: 'entrance',
+            userName: user.displayName || 'مستخدم',
+            entranceData: data.equippedEntrance,
+            timestamp: Date.now()
+          });
           setHasShownEntrance(true);
-          const duration = data.equippedEntrance.duration ? data.equippedEntrance.duration * 1000 : 4000;
-          setTimeout(() => setShowEntrance(null), duration);
         }
       }
     });
@@ -135,13 +141,17 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           // Only show events that happened after the component mounted AND within the last 5 seconds
           if (event.timestamp > mountTime.current && event.timestamp > Date.now() - 5000) {
             if (event.type === 'gift') {
-              setActiveGiftEvent(event);
+              setActiveGiftEvents(prev => [...prev, event]);
               setTimeout(() => {
-                setActiveGiftEvent(current => current?.timestamp === event.timestamp ? null : current);
+                setActiveGiftEvents(prev => prev.filter(e => e.timestamp !== event.timestamp));
               }, (event.giftDuration || 6) * 1000);
             } else if (event.type === 'lucky_jackpot') {
               setActiveJackpotEvent(event);
               setTimeout(() => setActiveJackpotEvent(null), 8000);
+            } else if (event.type === 'entrance') {
+              setShowEntrance({ ...event.entranceData, userName: event.userName });
+              const duration = event.entranceData.duration ? event.entranceData.duration * 1000 : 4000;
+              setTimeout(() => setShowEntrance(null), duration);
             }
           }
         }
@@ -266,6 +276,9 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
             giftAudioUrl: gift.audioUrl || null,
             giftDuration: gift.duration || 6,
             giftName: gift.name, 
+            giftCategory: gift.category || 'normal',
+            giftEffect: gift.effect || 'normal',
+            receiverId: receiverId,
             timestamp: Date.now()
           });
         }
@@ -331,14 +344,18 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
         {/* Background Layer */}
         <div className="absolute inset-0 z-0">
           {roomBackground ? (
-            <video 
-              src={roomBackground} 
-              autoPlay 
-              loop 
-              muted 
-              playsInline 
-              className="w-full h-full object-cover"
-            />
+            roomBackground.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+              <video 
+                src={roomBackground} 
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <img src={roomBackground} className="w-full h-full object-cover" alt="Background" />
+            )
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-indigo-950 via-purple-950 to-black"></div>
           )}
@@ -358,11 +375,22 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
             >
               {showEntrance.audioUrl && <audio autoPlay src={showEntrance.audioUrl} />}
               <div className="relative w-full h-full flex justify-center items-center">
-                <img 
-                  src={showEntrance.imageUrl} 
-                  alt="Entrance" 
-                  className={showEntrance.isFullScreen ? "w-full h-full object-cover" : "w-80 h-80 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"} 
-                />
+                {showEntrance.imageUrl?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                  <video 
+                    src={showEntrance.imageUrl} 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline 
+                    className={showEntrance.isFullScreen ? "w-full h-full object-cover" : "w-80 h-80 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"} 
+                  />
+                ) : (
+                  <img 
+                    src={showEntrance.imageUrl} 
+                    alt="Entrance" 
+                    className={showEntrance.isFullScreen ? "w-full h-full object-cover" : "w-80 h-80 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"} 
+                  />
+                )}
                 {!showEntrance.isFullScreen && (
                   <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm px-4 py-1.5 rounded-full border border-yellow-500/50 whitespace-nowrap">
                     <span className="text-yellow-400 font-bold text-sm">✨ {user?.displayName} دخل الغرفة ✨</span>
@@ -409,8 +437,9 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
 
         {/* Gift Animation Overlay */}
         <AnimatePresence>
-          {activeGiftEvent && (
+          {activeGiftEvents.map((event) => (
             <motion.div 
+              key={event.timestamp}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -419,10 +448,11 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
             >
               {/* Media */}
               {(() => {
-                const mediaUrl = activeGiftEvent.giftAnimationUrl || activeGiftEvent.giftImageUrl;
+                const mediaUrl = event.giftAnimationUrl || event.giftImageUrl;
                 const isVideo = mediaUrl?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) != null;
-                const isFullscreen = activeGiftEvent.giftAnimationSize === 'fullscreen';
-                const isLarge = activeGiftEvent.giftAnimationSize === 'large';
+                const isFullscreen = event.giftAnimationSize === 'fullscreen';
+                const isLarge = event.giftAnimationSize === 'large';
+                const isLucky = event.giftCategory === 'lucky';
                 
                 const mediaClass = isFullscreen 
                   ? "absolute inset-0 w-full h-full object-cover z-0" 
@@ -430,20 +460,52 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                     ? "w-96 h-96 object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]"
                     : "w-64 h-64 object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]";
 
-                const animationProps = isFullscreen 
+                // Lucky gift animation: start center, move to mic
+                let animationProps: any = isFullscreen 
                   ? { animate: { scale: [1.05, 1] }, transition: { duration: 0.5 } }
                   : { animate: { scale: [0.8, 1.2, 1] }, transition: { duration: 0.5 } };
 
+                if ((isLucky || event.giftEffect === 'zoom_mic') && event.receiverId) {
+                  // Find the mic position
+                  const targetMic = mics.find(m => m.userId === event.receiverId);
+                  const micElement = targetMic ? micRefs.current[targetMic.id] : null;
+                  
+                  if (micElement) {
+                    const rect = micElement.getBoundingClientRect();
+                    const parentRect = micElement.closest('.relative.overflow-hidden')?.getBoundingClientRect();
+                    
+                    if (parentRect) {
+                      const targetX = rect.left + rect.width / 2 - parentRect.left - parentRect.width / 2;
+                      const targetY = rect.top + rect.height / 2 - parentRect.top - parentRect.height / 2;
+                      
+                      animationProps = {
+                        initial: { scale: 0, x: 0, y: 0, opacity: 0 },
+                        animate: { 
+                          scale: [0, 1.5, 1.2, 1.5, 0], 
+                          x: [0, 0, targetX, targetX, targetX],
+                          y: [0, 0, targetY, targetY, targetY],
+                          opacity: [0, 1, 1, 1, 0]
+                        },
+                        transition: { 
+                          duration: event.giftDuration || 6,
+                          times: [0, 0.2, 0.5, 0.8, 1],
+                          ease: "easeInOut"
+                        }
+                      };
+                    }
+                  }
+                }
+
                 let effectClass = "";
-                if (activeGiftEvent.giftEffect === 'shake') effectClass = "animate-[shake_0.5s_ease-in-out_infinite]";
-                if (activeGiftEvent.giftEffect === 'pulse') effectClass = "animate-pulse";
-                if (activeGiftEvent.giftEffect === 'spin') effectClass = "animate-[spin_2s_linear_infinite]";
-                if (activeGiftEvent.giftEffect === 'bounce') effectClass = "animate-bounce";
+                if (event.giftEffect === 'shake') effectClass = "animate-[shake_0.5s_ease-in-out_infinite]";
+                if (event.giftEffect === 'pulse') effectClass = "animate-pulse";
+                if (event.giftEffect === 'spin') effectClass = "animate-[spin_2s_linear_infinite]";
+                if (event.giftEffect === 'bounce') effectClass = "animate-bounce";
 
                 return (
                   <>
-                    {activeGiftEvent.giftAudioUrl && (
-                      <audio autoPlay src={activeGiftEvent.giftAudioUrl} />
+                    {event.giftAudioUrl && (
+                      <audio autoPlay src={event.giftAudioUrl} />
                     )}
                     {isVideo ? (
                       <motion.video autoPlay loop muted playsInline src={mediaUrl} className={`${mediaClass} ${effectClass}`} {...animationProps} />
@@ -456,12 +518,12 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
 
               {/* Text Banner */}
               <div className="bg-gradient-to-r from-purple-600/80 to-pink-500/80 px-6 py-2 rounded-full backdrop-blur-md mb-8 border border-white/20 shadow-[0_0_30px_rgba(236,72,153,0.5)] z-10 absolute top-1/4">
-                <span className="text-yellow-300 font-bold">{activeGiftEvent.senderName}</span>
-                <span className="mx-2 text-white">أرسل {activeGiftEvent.giftName} إلى</span>
-                <span className="text-pink-300 font-bold">{activeGiftEvent.receiverName}</span>
+                <span className="text-yellow-300 font-bold">{event.senderName}</span>
+                <span className="mx-2 text-white">أرسل {event.giftName} إلى</span>
+                <span className="text-pink-300 font-bold">{event.receiverName}</span>
               </div>
             </motion.div>
-          )}
+          ))}
         </AnimatePresence>
 
         <div className="relative z-10 h-full flex flex-col">
@@ -486,7 +548,12 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           <div className="px-4 py-2 shrink-0">
             <div className="grid grid-cols-4 gap-y-6 gap-x-4">
               {mics.slice(0, settings.maxMics).map((mic, i) => (
-                <div key={mic.id} onClick={() => handleMicClick(mic)} className="flex flex-col items-center relative cursor-pointer group">
+                <div 
+                  key={mic.id} 
+                  ref={el => micRefs.current[mic.id] = el}
+                  onClick={() => handleMicClick(mic)} 
+                  className="flex flex-col items-center relative cursor-pointer group"
+                >
                   <div className="relative">
                     <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'}`}>
                       {mic.userId ? (
@@ -851,6 +918,7 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                   { id: 'entrance', label: 'دخوليات' },
                   { id: 'chat_bubble', label: 'فقاعات' },
                   { id: 'text_color', label: 'كتابة ملونة' },
+                  { id: 'room_background', label: 'خلفيات الغرف' },
                   { id: 'bag', label: 'الحقيبة 🎒' }
                 ].map(tab => (
                   <button
@@ -876,7 +944,8 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                         mic_icon: 'شكل مايك',
                         entrance: 'دخولية',
                         chat_bubble: 'فقاعة',
-                        text_color: 'كتابة ملونة'
+                        text_color: 'كتابة ملونة',
+                        room_background: 'خلفية غرفة'
                       };
                       const imageUrl = type === 'entrance' ? value.imageUrl : value;
                       return (
@@ -933,6 +1002,7 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                               };
                               if (item.type === 'chat_bubble') updateData.equippedBubble = item.imageUrl;
                               if (item.type === 'text_color') updateData.equippedTextColor = item.imageUrl;
+                              if (item.type === 'room_background') updateData.equippedBackground = item.imageUrl;
 
                               await updateDoc(doc(db, 'users', user.uid), updateData);
                               
