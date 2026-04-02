@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2 } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,6 +54,7 @@ export default function AdminDashboard() {
       <div className="flex overflow-x-auto bg-white border-b border-gray-200 hide-scrollbar">
         <TabButton active={activeTab === 'gifts'} onClick={() => setActiveTab('gifts')} icon={<Plus size={18} />} label="إضافة هدية" />
         <TabButton active={activeTab === 'games'} onClick={() => setActiveTab('games')} icon={<Gamepad2 size={18} />} label="الألعاب (هدايا الحظ)" />
+        <TabButton active={activeTab === 'icons'} onClick={() => setActiveTab('icons')} icon={<ImageIcon size={18} />} label="بنك الأيقونات" />
         <TabButton active={activeTab === 'giftBox'} onClick={() => setActiveTab('giftBox')} icon={<Gift size={18} />} label="صندوق الهدايا" />
         <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
         <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
@@ -63,6 +64,7 @@ export default function AdminDashboard() {
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'gifts' && <AddGiftTab />}
         {activeTab === 'games' && <GamesTab />}
+        {activeTab === 'icons' && <IconsBankTab />}
         {activeTab === 'giftBox' && <GiftBoxTab />}
         {activeTab === 'diamonds' && <DiamondsTab />}
         {activeTab === 'mics' && <MicsTab />}
@@ -83,6 +85,103 @@ function TabButton({ active, onClick, icon, label }: any) {
       {icon}
       <span className="text-sm">{label}</span>
     </button>
+  );
+}
+
+function IconsBankTab() {
+  const [giftBoxIcon, setGiftBoxIcon] = useState('');
+  const [micIcon, setMicIcon] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchIcons = async () => {
+      const docRef = doc(db, 'settings', 'app_icons');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setGiftBoxIcon(data.giftBoxIcon || '');
+        setMicIcon(data.micIcon || '');
+      }
+    };
+    fetchIcons();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'app_icons'), {
+        giftBoxIcon,
+        micIcon,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      alert('تم حفظ الأيقونات بنجاح!');
+    } catch (error: any) {
+      alert('خطأ في الحفظ: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+      <h2 className="text-lg font-bold mb-4 text-gray-800">بنك الأيقونات</h2>
+      <p className="text-sm text-gray-500 mb-6">قم بإضافة روابط الصور (PNG, JPG, GIF, SVG) لتغيير أيقونات التطبيق.</p>
+      
+      <form onSubmit={handleSave} className="space-y-6">
+        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
+          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة صندوق الهدايا</label>
+          <div className="flex gap-4 items-start">
+            <div className="flex-1">
+              <input 
+                type="url" 
+                value={giftBoxIcon} 
+                onChange={e => setGiftBoxIcon(e.target.value)} 
+                placeholder="رابط صورة أيقونة صندوق الهدايا" 
+                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
+                dir="ltr" 
+              />
+              <p className="text-xs text-gray-500 mt-1">تظهر في أسفل الغرفة لفتح صندوق الهدايا.</p>
+            </div>
+            {giftBoxIcon && (
+              <div className="w-12 h-12 rounded-lg bg-black/80 flex items-center justify-center shrink-0">
+                <img src={giftBoxIcon} alt="Preview" className="w-8 h-8 object-contain" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
+          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة المايك (الكرسي الفارغ)</label>
+          <div className="flex gap-4 items-start">
+            <div className="flex-1">
+              <input 
+                type="url" 
+                value={micIcon} 
+                onChange={e => setMicIcon(e.target.value)} 
+                placeholder="رابط صورة أيقونة المايك" 
+                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
+                dir="ltr" 
+              />
+              <p className="text-xs text-gray-500 mt-1">تظهر في الكراسي الفارغة داخل الغرفة.</p>
+            </div>
+            {micIcon && (
+              <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center shrink-0 border border-white/20">
+                <img src={micIcon} alt="Preview" className="w-6 h-6 object-contain" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={isSaving}
+          className="w-full bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition disabled:opacity-50"
+        >
+          {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -253,7 +352,7 @@ function GamesTab() {
           <label className="block text-sm font-medium text-gray-700 mb-1">رابط صوت الهدية (MP3, WAV - اختياري)</label>
           <input type="url" value={audioUrl} onChange={e => setAudioUrl(e.target.value)} placeholder="رابط ملف صوتي يعمل عند رمي الهدية" className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">قيمة الهدية (ألماس)</label>
             <input type="number" value={value} onChange={e => setValue(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="0" />
@@ -536,7 +635,7 @@ function MicsTab() {
 
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-bold mb-4 text-gray-800">مراقبة وإدارة المايكات</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {Array.from({ length: settings.maxMics }).map((_, index) => {
             const mic = mics.find(m => m.order === index);
             const isLocked = mic?.status === 'locked';

@@ -38,8 +38,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <div dir="rtl" className="flex justify-center bg-gray-100 min-h-screen font-sans text-gray-900">
-      <div className="w-full max-w-md bg-white min-h-screen shadow-2xl flex flex-col p-6 relative overflow-hidden">
+    <div dir="rtl" className="flex justify-center bg-gray-100 h-[100dvh] font-sans text-gray-900 overflow-hidden">
+      <div className="w-full max-w-md bg-white h-[100dvh] shadow-2xl flex flex-col p-6 relative overflow-hidden">
         {/* Background decorations */}
         <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-purple-100 to-transparent -z-10"></div>
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>

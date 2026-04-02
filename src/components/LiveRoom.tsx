@@ -25,6 +25,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
   const [userDiamonds, setUserDiamonds] = useState(0);
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string}>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch data
@@ -33,6 +34,10 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
 
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), (doc) => {
       if (doc.exists()) setUserDiamonds(doc.data().diamonds || 0);
+    });
+
+    const unsubAppIcons = onSnapshot(doc(db, 'settings', 'app_icons'), (doc) => {
+      if (doc.exists()) setAppIcons(doc.data() as any);
     });
 
     const unsubSettings = onSnapshot(doc(db, 'system', 'mic_settings'), (doc) => {
@@ -81,7 +86,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
       });
     });
 
-    return () => { unsubUser(); unsubSettings(); unsubMics(); unsubGifts(); unsubChat(); unsubEvents(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubChat(); unsubEvents(); };
   }, [user]);
 
   const handleMicClick = async (mic: any) => {
@@ -237,8 +242,8 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 text-white flex justify-center font-sans" dir="rtl">
-      <div className="w-full max-w-md h-full relative overflow-hidden bg-[url('https://picsum.photos/seed/roombg/800/1200')] bg-cover bg-center">
+    <div className="fixed inset-0 z-50 bg-gray-900 text-white flex justify-center font-sans h-[100dvh]" dir="rtl">
+      <div className="w-full max-w-md h-[100dvh] relative overflow-hidden bg-[url('https://picsum.photos/seed/roombg/800/1200')] bg-cover bg-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
 
         {/* 100k Jackpot Banner */}
@@ -296,7 +301,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                     : "w-64 h-64 object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]";
 
                 const animationProps = isFullscreen 
-                  ? { animate: { opacity: [0, 1, 1, 0] }, transition: { duration: 6 } }
+                  ? { animate: { scale: [1.05, 1] }, transition: { duration: 0.5 } }
                   : { animate: { scale: [0.8, 1.2, 1] }, transition: { duration: 0.5 } };
 
                 return (
@@ -305,7 +310,7 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                       <audio autoPlay src={activeGiftEvent.giftAudioUrl} />
                     )}
                     {isVideo ? (
-                      <motion.video autoPlay muted playsInline src={mediaUrl} className={mediaClass} {...animationProps} />
+                      <motion.video autoPlay loop muted playsInline src={mediaUrl} className={mediaClass} {...animationProps} />
                     ) : (
                       <motion.img src={mediaUrl} className={mediaClass} {...animationProps} />
                     )}
@@ -351,8 +356,14 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                       {mic.userId ? (
                         <img src={mic.userAvatar} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
-                        <div className="w-full h-full rounded-full flex items-center justify-center">
-                          {mic.status === 'locked' ? <ShieldBan size={20} className="text-red-400/50" /> : <Mic size={20} className="text-white/30" />}
+                        <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden">
+                          {mic.status === 'locked' ? (
+                            <ShieldBan size={20} className="text-red-400/50" />
+                          ) : appIcons.micIcon ? (
+                            <img src={appIcons.micIcon} alt="Mic" className="w-full h-full object-cover opacity-50" />
+                          ) : (
+                            <Mic size={20} className="text-white/30" />
+                          )}
                         </div>
                       )}
                     </div>
@@ -440,7 +451,11 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                 }
                 setShowGiftModal(true);
               }} className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg shadow-pink-500/30 hover:scale-105 transition">
-                <Gift size={18} />
+                {appIcons.giftBoxIcon ? (
+                  <img src={appIcons.giftBoxIcon} alt="Gift" className="w-5 h-5 object-contain" />
+                ) : (
+                  <Gift size={18} />
+                )}
                 صندوق الهدايا
               </button>
             </div>
@@ -450,33 +465,33 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
         {/* Gift Modal */}
         {showGiftModal && (
           <div className="absolute inset-0 z-50 flex flex-col justify-end">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowGiftModal(false)}></div>
-            <div className="bg-gray-900 rounded-t-3xl relative z-10 border-t border-gray-800 h-[75%] flex flex-col overflow-hidden shadow-2xl">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowGiftModal(false)}></div>
+            <div className="bg-black/70 backdrop-blur-xl rounded-t-3xl relative z-10 border-t border-white/10 h-[65%] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
               {/* Header */}
-              <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/95 sticky top-0 z-20">
-                <div className="flex items-center gap-2 bg-black/50 px-3 py-1.5 rounded-full">
+              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-transparent sticky top-0 z-20">
+                <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/5">
                   <span className="text-yellow-400 font-bold text-sm">{userDiamonds}</span>
                   <span className="text-xs text-gray-300">💎 رصيدك</span>
                 </div>
-                <h3 className="font-bold text-white text-lg">صندوق الهدايا</h3>
-                <button onClick={() => setShowGiftModal(false)} className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full transition"><X size={20} /></button>
+                <h3 className="font-bold text-white text-lg drop-shadow-md">صندوق الهدايا</h3>
+                <button onClick={() => setShowGiftModal(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition text-white"><X size={20} /></button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
                 {/* Receiver Selection */}
-                <div className="mb-6">
+                <div className="mb-5">
                   <p className="text-sm text-gray-300 mb-3 font-bold">إرسال إلى:</p>
                   <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
                     {mics.filter(m => m.userId).map(m => (
                       <button 
                         key={m.userId}
                         onClick={() => setSelectedReceiver(m.userId)}
-                        className={`flex flex-col items-center gap-2 min-w-[70px] p-2 rounded-2xl border-2 transition-all ${selectedReceiver === m.userId ? 'border-pink-500 bg-pink-500/10 scale-105' : 'border-transparent bg-gray-800 hover:bg-gray-700'}`}
+                        className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceiver === m.userId ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                       >
                         <div className="relative">
-                          <img src={m.userAvatar} className={`w-12 h-12 rounded-full object-cover ${selectedReceiver === m.userId ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-gray-900' : ''}`} />
+                          <img src={m.userAvatar} className={`w-11 h-11 rounded-full object-cover ${selectedReceiver === m.userId ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/50' : ''}`} />
                           {selectedReceiver === m.userId && (
-                            <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-1 border-2 border-gray-900">
+                            <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-0.5 border border-black/50">
                               <Check size={10} className="text-white" />
                             </div>
                           )}
@@ -485,79 +500,79 @@ export default function LiveRoom({ onClose }: { onClose: () => void }) {
                       </button>
                     ))}
                     {mics.filter(m => m.userId).length === 0 && (
-                      <div className="text-sm text-gray-500 w-full text-center py-4 bg-gray-800/50 rounded-xl">لا يوجد أشخاص على المايكات</div>
+                      <div className="text-sm text-gray-400 w-full text-center py-4 bg-white/5 rounded-xl border border-white/5">لا يوجد أشخاص على المايكات</div>
                     )}
                   </div>
                 </div>
 
                 {/* Gift Categories Tabs */}
-                <div className="flex gap-2 mb-4 bg-gray-800/50 p-1 rounded-xl">
+                <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/5">
                   <button 
                     onClick={() => setGiftCategory('classic')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     هدايا عادية
                   </button>
                   <button 
                     onClick={() => setGiftCategory('lucky')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
                   >
-                    <Star size={16} className={giftCategory === 'lucky' ? 'text-yellow-400' : ''} />
+                    <Star size={14} className={giftCategory === 'lucky' ? 'text-yellow-400' : ''} />
                     هدايا الحظ
                   </button>
                 </div>
 
                 {/* Gifts Grid */}
                 <div>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-4 gap-2.5">
                     {gifts.filter(g => (g.category || 'classic') === giftCategory).map(gift => (
                       <button 
                         key={gift.id}
                         onClick={() => setSelectedGift(gift)}
-                        className={`rounded-2xl p-3 flex flex-col items-center gap-2 border-2 transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/10 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.2)]' : 'border-transparent bg-gray-800 hover:bg-gray-700'}`}
+                        className={`rounded-2xl p-2.5 flex flex-col items-center gap-1.5 border transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                       >
-                        <img src={gift.imageUrl} alt={gift.name} className="w-14 h-14 object-contain drop-shadow-md" />
-                        <span className="text-[10px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
-                        <div className="flex items-center gap-1 text-yellow-400 text-[11px] font-bold bg-black/30 px-2 py-0.5 rounded-full">
+                        <img src={gift.imageUrl} alt={gift.name} className="w-12 h-12 object-contain drop-shadow-md" />
+                        <span className="text-[9px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
+                        <div className="flex items-center gap-1 text-yellow-400 text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
                           {gift.value} 💎
                         </div>
                       </button>
                     ))}
                     {gifts.filter(g => (g.category || 'classic') === giftCategory).length === 0 && (
-                      <div className="col-span-4 text-center text-gray-500 py-8 text-sm bg-gray-800/50 rounded-xl">لا توجد هدايا في هذا القسم</div>
+                      <div className="col-span-4 text-center text-gray-400 py-8 text-sm bg-white/5 rounded-xl border border-white/5">لا توجد هدايا في هذا القسم</div>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Footer / Send Button */}
-              <div className="p-4 bg-gray-900 border-t border-gray-800 shadow-[0_-10px_20px_rgba(0,0,0,0.3)]">
+              <div className="p-3 bg-black/50 border-t border-white/10 backdrop-blur-md">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1">
                     {selectedGift ? (
-                      <div className="flex items-center gap-3">
-                        <div className="bg-gray-800 p-2 rounded-xl">
-                          <img src={selectedGift.imageUrl} className="w-8 h-8 object-contain" />
+                      <div className="flex items-center gap-2">
+                        <div className="bg-white/10 p-1.5 rounded-xl border border-white/5">
+                          <img src={selectedGift.imageUrl} className="w-7 h-7 object-contain" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-white">{selectedGift.name}</p>
-                          <p className="text-xs text-yellow-400 font-bold">{selectedGift.value} 💎</p>
+                          <p className="text-xs font-bold text-white">{selectedGift.name}</p>
+                          <p className="text-[10px] text-yellow-400 font-bold">{selectedGift.value} 💎</p>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500 font-medium">لم يتم تحديد هدية</p>
+                      <p className="text-xs text-gray-400 font-medium ml-2">لم يتم تحديد هدية</p>
                     )}
                   </div>
                   <button 
                     onClick={handleSendGift}
                     disabled={!selectedGift || !selectedReceiver || isSendingGift}
-                    className={`px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 transition-all ${(!selectedGift || !selectedReceiver || isSendingGift) ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/30 hover:scale-105 active:scale-95'}`}
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all ${(!selectedGift || !selectedReceiver || isSendingGift) ? 'bg-white/10 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 border border-pink-400/50'}`}
                   >
                     {isSendingGift ? (
-                      <span className="animate-pulse">جاري الإرسال...</span>
+                      <span className="animate-pulse text-xs">جاري الإرسال...</span>
                     ) : (
                       <>
-                        <Send size={18} />
+                        <Send size={16} />
                         إرسال الهدية
                       </>
                     )}

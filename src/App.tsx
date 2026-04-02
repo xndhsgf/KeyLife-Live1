@@ -28,16 +28,16 @@ function MainApp() {
   }
 
   return (
-    <div dir="rtl" className="flex justify-center bg-gray-100 min-h-screen font-sans text-gray-900">
-      <div className="w-full max-w-md bg-gray-50 min-h-screen shadow-2xl relative flex flex-col overflow-hidden">
+    <div dir="rtl" className="flex justify-center bg-gray-100 h-[100dvh] font-sans text-gray-900 overflow-hidden">
+      <div className="w-full max-w-md bg-gray-50 h-[100dvh] shadow-2xl relative flex flex-col overflow-hidden">
         
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto pb-16">
-          {currentTab === 'home' && <HomePage onOpenRoom={() => setActiveRoom(true)} />}
-          {currentTab === 'discover' && <DiscoverPage />}
-          {currentTab === 'messages' && <MessagesPage />}
-          {currentTab === 'profile' && <ProfilePage onOpenAdmin={() => setCurrentTab('admin')} />}
-          {currentTab === 'admin' && <AdminDashboard />}
+        <div className="flex-1 flex flex-col overflow-hidden pb-16">
+          {currentTab === 'home' && <div className="flex-1 overflow-y-auto"><HomePage onOpenRoom={() => setActiveRoom(true)} /></div>}
+          {currentTab === 'discover' && <div className="flex-1 overflow-y-auto"><DiscoverPage /></div>}
+          {currentTab === 'messages' && <div className="flex-1 overflow-y-auto"><MessagesPage /></div>}
+          {currentTab === 'profile' && <div className="flex-1 overflow-y-auto"><ProfilePage onOpenAdmin={() => setCurrentTab('admin')} /></div>}
+          {currentTab === 'admin' && <div className="flex-1 overflow-hidden"><AdminDashboard /></div>}
         </div>
 
         {/* Bottom Navigation */}
