@@ -1,13 +1,94 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Flame, Users, MapPin, Radio, Mic } from 'lucide-react';
+import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => void }) {
+  const { user } = useAuth();
   const tabs = ['مشهور', 'متابع', 'سوريا', 'البث'];
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [showRankingModal, setShowRankingModal] = useState(false);
+  const [showCPModal, setShowCPModal] = useState(false);
+  const [topSupporters, setTopSupporters] = useState<any[]>([]);
+  const [targetCpId, setTargetCpId] = useState('');
+  const [cpLoading, setCpLoading] = useState(false);
+
+  const handleCPRequest = async () => {
+    if (!user || !targetCpId) return;
+    setCpLoading(true);
+    try {
+      // Get CP config
+      const configSnap = await getDoc(doc(db, 'settings', 'cp_config'));
+      const config = configSnap.exists() ? configSnap.data() : { price: 1000, frameUrl: '', backgroundUrl: '' };
+
+      // Get current user
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+
+      if ((userData?.diamonds || 0) < config.price) {
+        alert('رصيدك غير كافٍ لإرسال طلب الـ CP');
+        setCpLoading(false);
+        return;
+      }
+
+      // Find target user by numericId
+      const q = query(collection(db, 'users'), where('numericId', '==', targetCpId));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        alert('لم يتم العثور على مستخدم بهذا الآي دي');
+        setCpLoading(false);
+        return;
+      }
+
+      const targetUserDoc = querySnapshot.docs[0];
+      
+      if (targetUserDoc.id === user.uid) {
+        alert('لا يمكنك إرسال طلب لنفسك');
+        setCpLoading(false);
+        return;
+      }
+
+      // Deduct diamonds
+      await updateDoc(userRef, { diamonds: userData!.diamonds - config.price });
+
+      // Create CP Request
+      await setDoc(doc(collection(db, 'cp_requests')), {
+        senderId: user.uid,
+        senderName: userData?.displayName || 'مستخدم',
+        senderAvatar: userData?.photoURL || '',
+        receiverId: targetUserDoc.id,
+        receiverName: targetUserDoc.data().displayName || 'مستخدم',
+        receiverAvatar: targetUserDoc.data().photoURL || '',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        frameUrl: config.frameUrl,
+        backgroundUrl: config.backgroundUrl
+      });
+
+      alert('تم إرسال طلب الـ CP بنجاح!');
+      setShowCPModal(false);
+      setTargetCpId('');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setCpLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showRankingModal) {
+      const q = query(collection(db, 'users'), orderBy('dailySupport', 'desc'), limit(50));
+      const unsub = onSnapshot(q, (snapshot) => {
+        setTopSupporters(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+      return () => unsub();
+    }
+  }, [showRankingModal]);
 
   useEffect(() => {
     const q = query(collection(db, 'rooms'), where('active', '==', true));
@@ -100,7 +181,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
 
         {/* Categories */}
         <div className="flex gap-4">
-          <div className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100">
+          <div onClick={() => setShowRankingModal(true)} className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow">
             <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
               <Flame size={20} />
             </div>
@@ -109,7 +190,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
               <p className="text-[10px] text-gray-400">تصنيف الداعمين</p>
             </div>
           </div>
-          <div className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100">
+          <div onClick={() => setShowCPModal(true)} className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow">
             <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500">
               <Users size={20} />
             </div>
@@ -158,6 +239,72 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
           )}
         </div>
       </div>
+
+      {/* Ranking Modal */}
+      {showRankingModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex flex-col justify-end">
+          <div className="absolute inset-0" onClick={() => setShowRankingModal(false)}></div>
+          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">تصنيف الداعمين (اليومي)</h2>
+              <button onClick={() => setShowRankingModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {topSupporters.map((user, idx) => (
+                <div key={user.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-100 text-yellow-600' : idx === 1 ? 'bg-gray-200 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                    {idx + 1}
+                  </div>
+                  <img src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`} className="w-12 h-12 rounded-full object-cover" />
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-800">{user.displayName || 'مستخدم'}</p>
+                    <p className="text-xs text-gray-500">ID: {user.numericId || '---'}</p>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-yellow-600">{user.dailySupport || 0}</p>
+                    <p className="text-[10px] text-gray-400">ماسة</p>
+                  </div>
+                </div>
+              ))}
+              {topSupporters.length === 0 && (
+                <div className="text-center text-gray-500 py-10">لا يوجد داعمين اليوم</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* CP Modal */}
+      {showCPModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm relative">
+            <button onClick={() => setShowCPModal(false)} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600">
+              <X size={20} />
+            </button>
+            <h3 className="text-lg font-bold mb-4 text-center">طلب ارتباط (CP)</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الآي دي الخاص بالشريك</label>
+                <input
+                  type="text"
+                  value={targetCpId}
+                  onChange={e => setTargetCpId(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl font-mono text-center"
+                  placeholder="أدخل الآي دي..."
+                />
+              </div>
+              <button 
+                onClick={handleCPRequest}
+                disabled={cpLoading || !targetCpId}
+                className={`w-full py-3 rounded-xl font-bold text-white transition ${cpLoading || !targetCpId ? 'bg-gray-300' : 'bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg'}`}
+              >
+                {cpLoading ? 'جاري الإرسال...' : 'إرسال الطلب'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
+import { calculateLevel, getProgressToNextLevel } from '../lib/levels';
 
 export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void }) {
   const { user, logout, updateUserProfile } = useAuth();
@@ -11,20 +12,30 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   const [editPhotoURL, setEditPhotoURL] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
 
   useEffect(() => {
     if (user) {
       setEditName(user.displayName || '');
       setEditPhotoURL(user.photoURL || '');
       
-      // Check if user is admin
-      getDoc(doc(db, 'users', user.uid)).then(docSnap => {
-        if (docSnap.exists() && docSnap.data().role === 'admin') {
-          setIsAdmin(true);
+      const unsub = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setUserData(data);
+          if (data.role === 'admin') {
+            setIsAdmin(true);
+          }
         }
       });
+      return () => unsub();
     }
   }, [user]);
+
+  const chargingLevel = calculateLevel(userData?.totalSpent || 0);
+  const supportLevel = calculateLevel(userData?.totalSupport || 0);
+  const chargingProgress = getProgressToNextLevel(userData?.totalSpent || 0);
+  const supportProgress = getProgressToNextLevel(userData?.totalSupport || 0);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -48,14 +59,13 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   const menuItems = [
     { icon: <Crown size={20} />, label: 'VIP', color: 'text-yellow-500', bg: 'bg-yellow-50' },
     { icon: <ShoppingBag size={20} />, label: 'المول', color: 'text-pink-500', bg: 'bg-pink-50' },
-    { icon: <Tag size={20} />, label: 'خصم', color: 'text-red-500', bg: 'bg-red-50' },
-    { icon: <Wallet size={20} />, label: 'المحفظة', color: 'text-orange-500', bg: 'bg-orange-50', value: '1,250 💎' },
+    { icon: <TrendingUp size={20} />, label: 'مستوى الشحن', color: 'text-cyan-500', bg: 'bg-cyan-50', value: `Lv. ${chargingLevel}`, progress: chargingProgress },
+    { icon: <Award size={20} />, label: 'مستوى الدعم', color: 'text-purple-500', bg: 'bg-purple-50', value: `Lv. ${supportLevel}`, progress: supportProgress },
+    { icon: <Wallet size={20} />, label: 'المحفظة', color: 'text-orange-500', bg: 'bg-orange-50', value: `${(userData?.diamonds || 0).toLocaleString()} 💎` },
     { icon: <Gamepad2 size={20} />, label: 'ألعاب', color: 'text-blue-500', bg: 'bg-blue-50' },
     { icon: <Briefcase size={20} />, label: 'وكالة', color: 'text-indigo-500', bg: 'bg-indigo-50' },
-    { icon: <Award size={20} />, label: 'شارة', color: 'text-purple-500', bg: 'bg-purple-50' },
     { icon: <Video size={20} />, label: 'ابدأ البث المباشر', color: 'text-teal-500', bg: 'bg-teal-50' },
     { icon: <ImageIcon size={20} />, label: 'منشوراتي', color: 'text-green-500', bg: 'bg-green-50' },
-    { icon: <TrendingUp size={20} />, label: 'مستواي', color: 'text-cyan-500', bg: 'bg-cyan-50', value: 'Lv. 15' },
   ];
 
   return (
@@ -96,7 +106,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
           <div className="relative">
             <img src={isEditing ? (editPhotoURL || "https://picsum.photos/seed/myprofile/100/100") : (user?.photoURL || "https://picsum.photos/seed/myprofile/100/100")} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-purple-100" referrerPolicy="no-referrer" />
             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-white">
-              Lv. 15
+              Lv. {Math.max(chargingLevel, supportLevel)}
             </div>
           </div>
           
@@ -123,7 +133,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
               <>
                 <h1 className="text-xl font-bold text-gray-800">{user?.displayName || 'مستخدم جديد'}</h1>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-gray-500">ID: {user?.uid?.slice(0, 9) || '123456789'}</span>
+                  <span className="text-xs text-gray-500">ID: {userData?.numericId || '123456789'}</span>
                   <button className="text-purple-600 text-[10px] bg-purple-50 px-1.5 py-0.5 rounded">نسخ</button>
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -162,19 +172,26 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
       <div className="p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           {menuItems.map((item, idx) => (
-            <div key={idx} className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition ${idx !== menuItems.length - 1 ? 'border-b border-gray-50' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.bg} ${item.color}`}>
-                  {item.icon}
+            <div key={idx} className={`flex flex-col p-4 cursor-pointer hover:bg-gray-50 transition ${idx !== menuItems.length - 1 ? 'border-b border-gray-50' : ''}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.bg} ${item.color}`}>
+                    {item.icon}
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">{item.label}</span>
                 </div>
-                <span className="text-sm font-semibold text-gray-700">{item.label}</span>
+                <div className="flex items-center gap-2">
+                  {item.value && (
+                    <span className="text-xs font-bold text-gray-500">{item.value}</span>
+                  )}
+                  <ChevronLeft size={18} className="text-gray-400" />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {item.value && (
-                  <span className="text-xs font-bold text-gray-500">{item.value}</span>
-                )}
-                <ChevronLeft size={18} className="text-gray-400" />
-              </div>
+              {item.progress !== undefined && (
+                <div className="mt-3 w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                  <div className={`h-full ${item.color.replace('text-', 'bg-')}`} style={{ width: `${item.progress}%` }}></div>
+                </div>
+              )}
             </div>
           ))}
         </div>

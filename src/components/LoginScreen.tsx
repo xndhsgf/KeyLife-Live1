@@ -24,7 +24,7 @@ export default function LoginScreen() {
     } catch (err: any) {
       // Provide user-friendly error messages
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+        setError(isLogin ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة. تأكد من صحة البيانات أو قم بإنشاء حساب جديد.' : 'البيانات المدخلة غير صالحة.');
       } else if (err.code === 'auth/email-already-in-use') {
         setError('البريد الإلكتروني مستخدم بالفعل.');
       } else if (err.code === 'auth/weak-password') {

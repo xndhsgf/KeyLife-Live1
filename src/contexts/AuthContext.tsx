@@ -31,18 +31,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isMasterAdmin = currentUser.email === 'admin@cocco.com' || currentUser.email === 'iejehdgdig@gmail.com';
           
           if (!docSnap.exists()) {
+            const numericId = Math.floor(1000000 + Math.random() * 9000000).toString();
             await setDoc(userRef, {
               uid: currentUser.uid,
               email: currentUser.email,
               displayName: currentUser.displayName || (isMasterAdmin ? 'المدير العام' : 'مستخدم جديد'),
               photoURL: currentUser.photoURL || '',
               diamonds: isMasterAdmin ? 999999 : 0,
+              totalSpent: 0,
+              totalSupport: 0,
               role: isMasterAdmin ? 'admin' : 'user',
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              numericId: numericId
             });
-          } else if (isMasterAdmin && docSnap.data().role !== 'admin') {
-            // Ensure master admin always has admin role
-            await setDoc(userRef, { role: 'admin' }, { merge: true });
+          } else {
+            const data = docSnap.data();
+            if (isMasterAdmin && data.role !== 'admin') {
+              // Ensure master admin always has admin role
+              await setDoc(userRef, { role: 'admin' }, { merge: true });
+            }
+            if (!data.numericId) {
+              const numericId = Math.floor(1000000 + Math.random() * 9000000).toString();
+              await setDoc(userRef, { numericId }, { merge: true });
+            }
           }
         } catch (error) {
           console.error("Error creating user document:", error);
@@ -67,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseLoginWithEmail(email, pass);
     } catch (error) {
-      console.error("Email login failed", error);
       throw error;
     }
   };
@@ -76,7 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseSignupWithEmail(email, pass);
     } catch (error) {
-      console.error("Email signup failed", error);
       throw error;
     }
   };

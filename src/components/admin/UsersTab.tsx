@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, writeBatch } from 'firebase/firestore';
 import { Trash2, Edit2, Coins, Image as ImageIcon, Search } from 'lucide-react';
 
 export default function UsersTab() {
@@ -51,11 +51,41 @@ export default function UsersTab() {
     }
   };
 
+  const [numericIdInput, setNumericIdInput] = useState('');
+
+  const handleUpdateNumericId = async () => {
+    if (!selectedUser || !numericIdInput) return alert('الرجاء إدخال الآي دي الجديد');
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), { numericId: numericIdInput });
+      alert('تم تحديث الآي دي بنجاح');
+      setNumericIdInput('');
+      setSelectedUser(null);
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
   const handleDeleteUser = async (user: any) => {
     if (window.confirm(`هل أنت متأكد من حذف المستخدم ${user.displayName}؟`)) {
       try {
         await deleteDoc(doc(db, 'users', user.id));
         alert('تم حذف المستخدم بنجاح');
+      } catch (error: any) {
+        alert('خطأ: ' + error.message);
+      }
+    }
+  };
+
+  const handleResetDailySupport = async () => {
+    if (window.confirm('هل أنت متأكد من تصفير الدعم اليومي لجميع المستخدمين؟')) {
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const batch = writeBatch(db);
+        usersSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { dailySupport: 0 });
+        });
+        await batch.commit();
+        alert('تم تصفير الدعم اليومي بنجاح');
       } catch (error: any) {
         alert('خطأ: ' + error.message);
       }
@@ -69,8 +99,8 @@ export default function UsersTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div className="relative">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4 items-center">
+        <div className="relative flex-1">
           <Search className="absolute right-3 top-3 text-gray-400" size={20} />
           <input
             type="text"
@@ -80,6 +110,9 @@ export default function UsersTab() {
             className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
+        <button onClick={handleResetDailySupport} className="bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-xl font-bold whitespace-nowrap transition-colors">
+          تصفير الدعم اليومي
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -88,6 +121,7 @@ export default function UsersTab() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-sm font-bold text-gray-700">المستخدم</th>
+                <th className="px-4 py-3 text-sm font-bold text-gray-700">الآي دي</th>
                 <th className="px-4 py-3 text-sm font-bold text-gray-700">البريد</th>
                 <th className="px-4 py-3 text-sm font-bold text-gray-700">الرصيد</th>
                 <th className="px-4 py-3 text-sm font-bold text-gray-700">تاريخ التسجيل</th>
@@ -103,6 +137,7 @@ export default function UsersTab() {
                       <span className="font-bold text-gray-800">{user.displayName || 'مستخدم'}</span>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 font-mono">{user.numericId || '---'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
                   <td className="px-4 py-3 text-sm font-bold text-yellow-600">{user.diamonds || 0} 💎</td>
                   <td className="px-4 py-3 text-sm text-gray-500">
@@ -110,6 +145,9 @@ export default function UsersTab() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
+                      <button onClick={() => setSelectedUser({ ...user, action: 'numericId' })} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="تعديل الآي دي">
+                        <Edit2 size={18} />
+                      </button>
                       <button onClick={() => setSelectedUser({ ...user, action: 'coins' })} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="تعديل الرصيد">
                         <Coins size={18} />
                       </button>
@@ -132,6 +170,30 @@ export default function UsersTab() {
       </div>
 
       {/* Modals */}
+      {selectedUser && selectedUser.action === 'numericId' && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">تعديل الآي دي لـ {selectedUser.displayName}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الآي دي الجديد</label>
+                <input
+                  type="text"
+                  value={numericIdInput}
+                  onChange={e => setNumericIdInput(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl font-mono"
+                  placeholder="مثال: 1234567"
+                />
+              </div>
+              <button onClick={handleUpdateNumericId} className="w-full bg-purple-600 text-white font-bold py-2 rounded-xl">
+                حفظ الآي دي
+              </button>
+              <button onClick={() => setSelectedUser(null)} className="w-full text-gray-500 py-2">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedUser && selectedUser.action === 'coins' && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">

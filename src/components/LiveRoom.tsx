@@ -1,17 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond } from 'lucide-react';
+import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
+import { calculateLevel } from '../lib/levels';
 
 export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: string, onClose: () => void, onMinimize?: () => void }) {
   const { user } = useAuth();
   const [showAdminTools, setShowAdminTools] = useState(false);
+  const [showBackgroundModal, setShowBackgroundModal] = useState(false);
+  const [roomBackground, setRoomBackground] = useState<any>(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showMallModal, setShowMallModal] = useState(false);
   const [showLuckyBoxModal, setShowLuckyBoxModal] = useState(false);
+  const [bigWinConfig, setBigWinConfig] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchBigWinConfig = async () => {
+      const docSnap = await getDoc(doc(db, 'settings', 'big_win_config'));
+      if (docSnap.exists()) {
+        setBigWinConfig(docSnap.data());
+      }
+    };
+    fetchBigWinConfig();
+  }, []);
   const [mallCategory, setMallCategory] = useState('mic_frame');
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
   
@@ -70,6 +84,13 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
     const unsubSettings = onSnapshot(doc(db, 'system', 'mic_settings'), (doc) => {
       if (doc.exists()) {
         setSettings(doc.data() as any);
+      }
+    });
+
+    const unsubRoom = onSnapshot(doc(db, 'rooms', roomId), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setRoomBackground(data.backgroundUrl || null);
       }
     });
 
@@ -144,7 +165,15 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           await updateDoc(doc(db, 'rooms', roomId, 'mics', mic.id), { userId: null, userAvatar: null, userName: null, userMicFrame: null, userMicIcon: null });
         }
       } else {
-        setSelectedProfile({ uid: mic.userId, name: mic.userName, avatar: mic.userAvatar });
+        const userDoc = await getDoc(doc(db, 'users', mic.userId));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        setSelectedProfile({ 
+          uid: mic.userId, 
+          name: mic.userName, 
+          avatar: mic.userAvatar,
+          totalSpent: userData.totalSpent || 0,
+          totalSupport: userData.totalSupport || 0
+        });
       }
       return;
     }
@@ -212,7 +241,13 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
         }
 
         // Deduct gift value from sender, add win amount if they won
-        transaction.update(senderRef, { diamonds: senderDiamonds - gift.value + winAmount });
+        const currentDailySupport = senderDoc.data().dailySupport || 0;
+        const currentTotalSupport = senderDoc.data().totalSupport || 0;
+        transaction.update(senderRef, { 
+          diamonds: senderDiamonds - gift.value + winAmount,
+          dailySupport: currentDailySupport + gift.value,
+          totalSupport: currentTotalSupport + gift.value
+        });
         // Receiver always gets the base gift value
         transaction.update(receiverRef, { diamonds: (receiverDoc.data().diamonds || 0) + gift.value });
 
@@ -235,12 +270,13 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           });
         }
 
-        if (isWin && winAmount >= 100000) {
+        if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
           transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
             type: 'lucky_jackpot',
             userName: user!.displayName || 'مستخدم',
             amount: winAmount,
             giftName: gift.name,
+            audioUrl: bigWinConfig?.audioUrl || null,
             timestamp: Date.now()
           });
         }
@@ -291,9 +327,24 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-950 text-white flex justify-center font-sans h-[100dvh]" dir="rtl">
-      <div className="w-full max-w-md h-[100dvh] relative overflow-hidden bg-gradient-to-b from-indigo-950 via-purple-950 to-black">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20"></div>
-        <div className="absolute inset-0 bg-black/40"></div>
+      <div className="w-full max-w-md h-[100dvh] relative overflow-hidden">
+        {/* Background Layer */}
+        <div className="absolute inset-0 z-0">
+          {roomBackground ? (
+            <video 
+              src={roomBackground} 
+              autoPlay 
+              loop 
+              muted 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-b from-indigo-950 via-purple-950 to-black"></div>
+          )}
+          <div className="absolute inset-0 bg-black/40"></div>
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20"></div>
+        </div>
 
         {/* Entrance Animation Overlay */}
         <AnimatePresence>
@@ -332,6 +383,9 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
               className="absolute top-4 left-4 right-4 z-[110] pointer-events-none"
             >
+              {activeJackpotEvent.audioUrl && (
+                <audio src={activeJackpotEvent.audioUrl} autoPlay />
+              )}
               <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 p-[2px] rounded-2xl shadow-[0_0_30px_rgba(234,179,8,0.5)]">
                 <div className="bg-gray-900/90 backdrop-blur-md rounded-2xl p-3 flex items-center gap-3">
                   <div className="bg-yellow-500/20 p-2 rounded-xl">
@@ -543,6 +597,20 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               <button onClick={() => setShowAdminTools(true)} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <MoreHorizontal size={20} />
               </button>
+              <button onClick={async () => {
+                if (!user) return;
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userData = userDoc.exists() ? userDoc.data() : {};
+                setSelectedProfile({ 
+                  uid: user.uid, 
+                  name: user.displayName, 
+                  avatar: user.photoURL,
+                  totalSpent: userData.totalSpent || 0,
+                  totalSupport: userData.totalSupport || 0
+                });
+              }} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
+                <User size={20} />
+              </button>
               <div className="flex-1"></div>
               <button onClick={() => {
                 const firstUserOnMic = mics.find(m => m.userId);
@@ -697,7 +765,7 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                   { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
                   { icon: <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
-                  { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400' },
+                  { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
                   { icon: <Music />, label: 'موسيقى', color: 'text-green-400' },
                   { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
                   { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
@@ -710,6 +778,20 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Background Modal */}
+        {showBackgroundModal && (
+          <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowBackgroundModal(false)}>
+            <div className="bg-gray-900 w-full rounded-t-3xl p-6 border-t border-gray-800 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)] h-[70%]" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white">خلفية الغرفة</h3>
+                <button onClick={() => setShowBackgroundModal(false)} className="text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+              </div>
+
+              <BackgroundSelector roomId={roomId} onClose={() => setShowBackgroundModal(false)} />
             </div>
           </div>
         )}
@@ -954,11 +1036,11 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               <div className="flex justify-center gap-4 mb-6">
                 <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
                   <p className="text-[10px] text-gray-400 mb-1">مستوى الدعم</p>
-                  <p className="text-yellow-400 font-bold flex items-center gap-1 justify-center"><Crown size={14}/> Lv.12</p>
+                  <p className="text-yellow-400 font-bold flex items-center gap-1 justify-center"><Crown size={14}/> Lv.{calculateLevel(selectedProfile.totalSupport || 0)}</p>
                 </div>
                 <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
                   <p className="text-[10px] text-gray-400 mb-1">مستوى الشحن</p>
-                  <p className="text-blue-400 font-bold flex items-center gap-1 justify-center"><Diamond size={14}/> Lv.8</p>
+                  <p className="text-blue-400 font-bold flex items-center gap-1 justify-center"><Diamond size={14}/> Lv.{calculateLevel(selectedProfile.totalSpent || 0)}</p>
                 </div>
               </div>
               
@@ -984,6 +1066,138 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                 </button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BackgroundSelector({ roomId, onClose }: { roomId: string, onClose: () => void }) {
+  const { user } = useAuth();
+  const [backgrounds, setBackgrounds] = useState<any[]>([]);
+  const [customUrl, setCustomUrl] = useState('');
+  const [customType, setCustomType] = useState('image');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      getDoc(doc(db, 'rooms', roomId)).then(docSnap => {
+        if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
+          setIsOwner(true);
+        }
+      });
+    }
+
+    const q = query(collection(db, 'room_backgrounds'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setBackgrounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, [user, roomId]);
+
+  const handleSelect = async (bg: any) => {
+    if (!isOwner) return alert('عذراً، صاحب الغرفة فقط من يمكنه تغيير الخلفية');
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'rooms', roomId), {
+        background: {
+          url: bg.url,
+          type: bg.type
+        }
+      });
+      onClose();
+    } catch (error: any) {
+      alert('خطأ في تعيين الخلفية: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCustomSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isOwner) return alert('عذراً، صاحب الغرفة فقط من يمكنه تغيير الخلفية');
+    if (!customUrl) return;
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'rooms', roomId), {
+        background: {
+          url: customUrl,
+          type: customType
+        }
+      });
+      onClose();
+    } catch (error: any) {
+      alert('خطأ في تعيين الخلفية: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!isOwner) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-6">
+        <ShieldAlert size={48} className="text-red-500 mb-4" />
+        <h3 className="text-lg font-bold text-white mb-2">صلاحية محدودة</h3>
+        <p className="text-gray-400 text-sm">عذراً، صاحب الغرفة فقط هو من يملك صلاحية تغيير الخلفية.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="mb-6">
+        <h4 className="text-sm font-bold text-gray-400 mb-3">رفع خلفية خاصة</h4>
+        <form onSubmit={handleCustomSubmit} className="flex gap-2">
+          <input 
+            type="text" 
+            value={customUrl} 
+            onChange={e => setCustomUrl(e.target.value)} 
+            placeholder="رابط الصورة أو الفيديو..." 
+            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none focus:border-purple-500"
+            dir="ltr"
+          />
+          <select 
+            value={customType} 
+            onChange={e => setCustomType(e.target.value)}
+            className="bg-black/40 border border-white/10 rounded-xl px-2 py-2 text-xs outline-none"
+          >
+            <option value="image">صورة</option>
+            <option value="video">فيديو</option>
+          </select>
+          <button 
+            type="submit" 
+            disabled={isSaving || !customUrl}
+            className="bg-purple-600 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
+          >
+            حفظ
+          </button>
+        </form>
+      </div>
+
+      <h4 className="text-sm font-bold text-gray-400 mb-3">اختر من المكتبة</h4>
+      <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-4 pb-10 hide-scrollbar">
+        {backgrounds.map(bg => (
+          <div 
+            key={bg.id} 
+            onClick={() => handleSelect(bg)}
+            className="relative rounded-2xl overflow-hidden aspect-video bg-gray-800 border border-white/5 cursor-pointer hover:border-purple-500 transition group"
+          >
+            {bg.type === 'video' ? (
+              <video src={bg.url} className="w-full h-full object-cover" muted />
+            ) : (
+              <img src={bg.url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            )}
+            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1.5 text-[10px] text-center truncate">
+              {bg.name}
+            </div>
+          </div>
+        ))}
+        {backgrounds.length === 0 && (
+          <div className="col-span-2 text-center py-10 text-gray-500 text-sm">
+            لا توجد خلفيات في المكتبة حالياً
           </div>
         )}
       </div>

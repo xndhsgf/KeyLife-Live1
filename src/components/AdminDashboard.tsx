@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import BannersTab from './admin/BannersTab';
 import UsersTab from './admin/UsersTab';
+import RoomBackgroundsTab from './admin/RoomBackgroundsTab';
+import AdminResetTab from './admin/AdminResetTab';
+import CPTab from './admin/CPTab';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('gifts');
@@ -62,6 +65,9 @@ export default function AdminDashboard() {
         <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
         <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
         <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
+        <TabButton active={activeTab === 'cp'} onClick={() => setActiveTab('cp')} icon={<Users size={18} />} label="إعدادات الـ CP" />
+        <TabButton active={activeTab === 'backgrounds'} onClick={() => setActiveTab('backgrounds')} icon={<ImageIcon size={18} />} label="خلفيات الغرف" />
+        <TabButton active={activeTab === 'reset'} onClick={() => setActiveTab('reset')} icon={<RefreshCw size={18} />} label="إعادة تعيين الحساب" />
         <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<List size={18} />} label="سجلات الدخول" />
         <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<List size={18} />} label="سجل العمليات" />
       </div>
@@ -75,6 +81,9 @@ export default function AdminDashboard() {
         {activeTab === 'diamonds' && <DiamondsTab />}
         {activeTab === 'mics' && <MicsTab />}
         {activeTab === 'banners' && <BannersTab />}
+        {activeTab === 'cp' && <CPTab />}
+        {activeTab === 'backgrounds' && <RoomBackgroundsTab />}
+        {activeTab === 'reset' && <AdminResetTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'logs' && <LogsTab />}
       </div>
@@ -489,6 +498,32 @@ function GamesTab() {
   const [animationSize, setAnimationSize] = useState('normal');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [bigWinConfig, setBigWinConfig] = useState({ threshold: 1000, audioUrl: '' });
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      const docSnap = await getDoc(doc(db, 'settings', 'big_win_config'));
+      if (docSnap.exists()) {
+        setBigWinConfig(docSnap.data() as any);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  const handleSaveBigWinConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfig(true);
+    try {
+      await setDoc(doc(db, 'settings', 'big_win_config'), bigWinConfig);
+      alert('تم حفظ إعدادات الفوز الكبير بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
   const handleAddLuckyGift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !value) return alert('يرجى إدخال اسم وقيمة الهدية');
@@ -521,9 +556,29 @@ function GamesTab() {
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-      <h2 className="text-lg font-bold mb-4 text-gray-800">إضافة هدية حظ (قسم الألعاب)</h2>
-      <form onSubmit={handleAddLuckyGift} className="space-y-4">
+    <div className="space-y-6">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4 text-gray-800">إعدادات الفوز الكبير (شريط عالي)</h2>
+        <form onSubmit={handleSaveBigWinConfig} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الحد الأدنى للفوز الكبير (بالألماس)</label>
+              <input type="number" value={bigWinConfig.threshold} onChange={e => setBigWinConfig({...bigWinConfig, threshold: Number(e.target.value)})} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">رابط الصوت (MP3, WAV)</label>
+              <input type="url" value={bigWinConfig.audioUrl} onChange={e => setBigWinConfig({...bigWinConfig, audioUrl: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" placeholder="https://..." />
+            </div>
+          </div>
+          <button type="submit" disabled={isSavingConfig} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
+            {isSavingConfig ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4 text-gray-800">إضافة هدية حظ (قسم الألعاب)</h2>
+        <form onSubmit={handleAddLuckyGift} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">اسم الهدية</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required />
@@ -582,6 +637,7 @@ function GamesTab() {
           {isSubmitting ? 'جاري الإضافة...' : 'إضافة هدية الحظ'}
         </button>
       </form>
+      </div>
     </div>
   );
 }
@@ -663,9 +719,13 @@ function DiamondsTab() {
       }
 
       const currentDiamonds = userSnap.data().diamonds || 0;
+      const currentTotalSpent = userSnap.data().totalSpent || 0;
       const newAmount = currentDiamonds + Number(amount);
 
-      await updateDoc(userRef, { diamonds: newAmount });
+      await updateDoc(userRef, { 
+        diamonds: newAmount,
+        totalSpent: currentTotalSpent + Number(amount)
+      });
       
       await addDoc(collection(db, 'transactions'), {
         userId,
@@ -931,6 +991,151 @@ function LogsTab() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function BackgroundsTab() {
+  const [backgrounds, setBackgrounds] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [type, setType] = useState('image'); // image or video
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'room_backgrounds'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setBackgrounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !url) return alert('الرجاء تعبئة جميع الحقول');
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, 'room_backgrounds'), {
+        name,
+        url,
+        type,
+        timestamp: Date.now()
+      });
+      setName('');
+      setUrl('');
+    } catch (error: any) {
+      alert('خطأ في الإضافة: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذه الخلفية؟')) return;
+    try {
+      await deleteDoc(doc(db, 'room_backgrounds', id));
+    } catch (error: any) {
+      alert('خطأ في الحذف: ' + error.message);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4 text-gray-800">إضافة خلفية جديدة</h2>
+        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="اسم الخلفية" className="p-2 border rounded-lg text-sm" />
+          <input type="text" value={url} onChange={e => setUrl(e.target.value)} placeholder="رابط الخلفية (صورة أو MP4)" className="p-2 border rounded-lg text-sm" dir="ltr" />
+          <select value={type} onChange={e => setType(e.target.value)} className="p-2 border rounded-lg text-sm">
+            <option value="image">صورة</option>
+            <option value="video">فيديو (MP4)</option>
+          </select>
+          <button type="submit" disabled={isSaving} className="bg-purple-600 text-white p-2 rounded-lg text-sm font-bold hover:bg-purple-700 transition">
+            {isSaving ? 'جاري الإضافة...' : 'إضافة الخلفية'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4 text-gray-800">الخلفيات المضافة</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {backgrounds.map(bg => (
+            <div key={bg.id} className="relative group rounded-xl overflow-hidden border border-gray-100 aspect-video bg-gray-100">
+              {bg.type === 'video' ? (
+                <video src={bg.url} className="w-full h-full object-cover" muted />
+              ) : (
+                <img src={bg.url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <button onClick={() => handleDelete(bg.id)} className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1 text-[10px] text-white text-center truncate">
+                {bg.name} ({bg.type === 'video' ? 'فيديو' : 'صورة'})
+              </div>
+            </div>
+          ))}
+          {backgrounds.length === 0 && <p className="text-gray-500 text-sm col-span-full text-center py-4">لا توجد خلفيات مضافة حالياً</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ManagerTab() {
+  const { user } = useAuth();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleResetAccount = async () => {
+    if (!user) return;
+    if (!confirm('تحذير: سيتم حذف جميع بيانات حسابك (الألماس، المستويات، العناصر المشتراة، الصورة، والاسم) وإعادتها للوضع الافتراضي. هل أنت متأكد؟')) return;
+    
+    setIsResetting(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        displayName: 'المدير العام',
+        photoURL: '',
+        diamonds: 0,
+        totalSpent: 0,
+        totalSupport: 0,
+        equippedMicFrame: null,
+        equippedMicIcon: null,
+        equippedEntrance: null,
+        equippedBubble: null,
+        equippedTextColor: null,
+        resetAt: new Date().toISOString()
+      });
+      alert('تم إعادة تعيين حساب المدير بنجاح!');
+      window.location.reload();
+    } catch (error: any) {
+      alert('خطأ في إعادة التعيين: ' + error.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
+      <ShieldAlert size={48} className="text-red-500 mx-auto mb-4" />
+      <h2 className="text-xl font-bold mb-2 text-gray-800">إدارة حساب المدير</h2>
+      <p className="text-gray-500 mb-8 text-sm">هذا القسم مخصص لإعادة تعيين بيانات حساب المدير الحالي.</p>
+      
+      <div className="max-w-xs mx-auto">
+        <button 
+          onClick={handleResetAccount}
+          disabled={isResetting}
+          className="w-full bg-red-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-red-500/20 hover:bg-red-600 transition flex items-center justify-center gap-2"
+        >
+          {isResetting ? 'جاري إعادة التعيين...' : (
+            <>
+              <Trash2 size={20} />
+              إعادة ريستارت حساب المدير
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
