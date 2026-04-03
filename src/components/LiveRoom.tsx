@@ -5,8 +5,21 @@ import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { calculateLevel } from '../lib/levels';
+import BackgroundSelector from './BackgroundSelector';
 
-export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: string, onClose: () => void, onMinimize?: () => void }) {
+export default function LiveRoom({ 
+  roomId, 
+  onClose, 
+  onMinimize,
+  hasShownEntrance,
+  onEntranceShown 
+}: { 
+  roomId: string, 
+  onClose: () => void, 
+  onMinimize?: () => void,
+  hasShownEntrance: boolean,
+  onEntranceShown: () => void
+}) {
   const { user } = useAuth();
   const [showAdminTools, setShowAdminTools] = useState(false);
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
@@ -44,14 +57,15 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [userDiamonds, setUserDiamonds] = useState(0);
   const [equippedItems, setEquippedItems] = useState<any>({});
+  const [purchasedItems, setPurchasedItems] = useState<any[]>([]);
   const [showEntrance, setShowEntrance] = useState<any>(null);
-  const [hasShownEntrance, setHasShownEntrance] = useState(false);
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string}>({});
+  const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string, idIcon?: string}>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const mountTime = useRef(Date.now());
+  const entranceTriggeredRef = useRef(false);
 
   // Fetch data
   useEffect(() => {
@@ -69,17 +83,6 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           text_color: data.equippedTextColor,
           room_background: data.equippedBackground
         });
-        
-        if (data.equippedEntrance && !hasShownEntrance) {
-          // Add to room_events so others can see it
-          await addDoc(collection(db, 'rooms', roomId, 'room_events'), {
-            type: 'entrance',
-            userName: user.displayName || 'مستخدم',
-            entranceData: data.equippedEntrance,
-            timestamp: Date.now()
-          });
-          setHasShownEntrance(true);
-        }
       }
     });
 
@@ -117,6 +120,10 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
 
     const unsubStore = onSnapshot(collection(db, 'store_items'), (snapshot) => {
       setStoreItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubPurchased = onSnapshot(collection(db, 'users', user.uid, 'purchased_items'), (snapshot) => {
+      setPurchasedItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     const qChat = query(collection(db, 'rooms', roomId, 'room_chat'), orderBy('timestamp', 'desc'), limit(30));
@@ -158,8 +165,37 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
       });
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); };
   }, [user]);
+
+  // Handle entrance effect on join
+  useEffect(() => {
+    if (!user || hasShownEntrance || entranceTriggeredRef.current) return;
+
+    const triggerEntrance = async () => {
+      try {
+        entranceTriggeredRef.current = true;
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.equippedEntrance) {
+            await addDoc(collection(db, 'rooms', roomId, 'room_events'), {
+              type: 'entrance',
+              userName: user.displayName || 'مستخدم',
+              entranceData: data.equippedEntrance,
+              timestamp: Date.now()
+            });
+            onEntranceShown();
+          }
+        }
+      } catch (e) {
+        console.error('Error triggering entrance:', e);
+        entranceTriggeredRef.current = false;
+      }
+    };
+    
+    triggerEntrance();
+  }, [roomId, user, hasShownEntrance, onEntranceShown]);
 
   const handleMicClick = async (mic: any) => {
     if (!user) return;
@@ -182,7 +218,9 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
           name: mic.userName, 
           avatar: mic.userAvatar,
           totalSpent: userData.totalSpent || 0,
-          totalSupport: userData.totalSupport || 0
+          totalSupport: userData.totalSupport || 0,
+          numericId: userData.numericId,
+          badges: userData.badges || []
         });
       }
       return;
@@ -606,7 +644,24 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                   <img src={msg.userBubble} className="absolute inset-0 w-full h-full object-fill z-0 rounded-xl opacity-90 pointer-events-none" />
                 )}
                 <div className="relative z-10">
-                  <span className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1`}>{msg.userName}:</span>
+                  <span 
+                    onClick={async () => {
+                      const userDoc = await getDoc(doc(db, 'users', msg.userId));
+                      const userData = userDoc.exists() ? userDoc.data() : {};
+                      setSelectedProfile({
+                        uid: msg.userId,
+                        name: msg.userName,
+                        avatar: msg.userAvatar,
+                        totalSpent: userData.totalSpent || 0,
+                        totalSupport: userData.totalSupport || 0,
+                        numericId: userData.numericId,
+                        badges: userData.badges || []
+                      });
+                    }}
+                    className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1 cursor-pointer hover:underline`}
+                  >
+                    {msg.userName}:
+                  </span>
                   <span className="text-xs" style={{ color: msg.userTextColor || 'white' }}>{msg.text}</span>
                 </div>
               </div>
@@ -673,7 +728,9 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                   name: user.displayName, 
                   avatar: user.photoURL,
                   totalSpent: userData.totalSpent || 0,
-                  totalSupport: userData.totalSupport || 0
+                  totalSupport: userData.totalSupport || 0,
+                  numericId: userData.numericId,
+                  badges: userData.badges || []
                 });
               }} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <User size={20} />
@@ -937,8 +994,8 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               
               <div className="overflow-y-auto h-[calc(100%-130px)] hide-scrollbar pb-10">
                 {mallCategory === 'bag' ? (
-                  <div className="grid grid-cols-3 gap-4">
-                    {Object.entries(equippedItems).filter(([_, value]) => value).map(([type, value]: [string, any]) => {
+                  <div className="grid grid-cols-3 gap-4 pb-10">
+                    {purchasedItems.map((item: any) => {
                       const typeLabels: any = {
                         mic_frame: 'إطار مايك',
                         mic_icon: 'شكل مايك',
@@ -947,31 +1004,104 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                         text_color: 'كتابة ملونة',
                         room_background: 'خلفية غرفة'
                       };
-                      const imageUrl = type === 'entrance' ? value.imageUrl : value;
+                      
+                      const isEquipped = (() => {
+                        const equipped = equippedItems[item.type];
+                        if (!equipped) return false;
+                        if (item.type === 'entrance') return equipped.imageUrl === item.imageUrl;
+                        return equipped === item.imageUrl;
+                      })();
+
                       return (
-                        <div key={type} className="bg-gray-800/50 border border-purple-500/30 rounded-2xl p-3 flex flex-col items-center relative">
-                          <div className="absolute top-2 right-2 bg-purple-500 text-white text-[8px] px-2 py-0.5 rounded-full">
-                            مستخدم حالياً
-                          </div>
-                          <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 mt-2 relative flex items-center justify-center overflow-hidden">
-                            {type === 'text_color' ? (
-                              <div className="w-full h-full" style={{ backgroundColor: imageUrl }}></div>
+                        <div key={item.id} className={`bg-gray-800/50 border ${isEquipped ? 'border-purple-500' : 'border-gray-700'} rounded-2xl p-3 flex flex-col items-center relative`}>
+                          {isEquipped && (
+                            <div className="absolute top-2 right-2 bg-purple-500 text-white text-[8px] px-2 py-0.5 rounded-full z-20">
+                              مستخدم
+                            </div>
+                          )}
+                          <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 relative flex items-center justify-center overflow-hidden">
+                            {item.type === 'text_color' ? (
+                              <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
                             ) : (
-                              <img src={imageUrl} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${type === 'mic_frame' ? 'scale-125' : ''}`} />
+                              <img src={item.imageUrl} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
                             )}
-                            {type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
-                            {type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
+                            {item.type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
+                            {item.type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
                           </div>
-                          <h4 className="text-white text-xs font-bold text-center mb-1">{typeLabels[type]}</h4>
+                          <h4 className="text-white text-[10px] font-bold text-center mb-2 truncate w-full">{item.name}</h4>
+                          
+                          <div className="flex flex-col gap-1 w-full">
+                            <button 
+                              onClick={async () => {
+                                if (!user) return;
+                                try {
+                                  const updateData: any = {};
+                                  if (item.type === 'mic_frame') updateData.equippedMicFrame = item.imageUrl;
+                                  if (item.type === 'mic_icon') updateData.equippedMicIcon = item.imageUrl;
+                                  if (item.type === 'entrance') updateData.equippedEntrance = {
+                                    imageUrl: item.imageUrl,
+                                    isFullScreen: item.isFullScreen,
+                                    audioUrl: item.audioUrl,
+                                    duration: item.duration
+                                  };
+                                  if (item.type === 'chat_bubble') updateData.equippedBubble = item.imageUrl;
+                                  if (item.type === 'text_color') updateData.equippedTextColor = item.imageUrl;
+                                  if (item.type === 'room_background') updateData.equippedBackground = item.imageUrl;
+
+                                  await updateDoc(doc(db, 'users', user.uid), updateData);
+                                  
+                                  if (item.type === 'mic_frame') {
+                                    const myMic = mics.find(m => m.userId === user.uid);
+                                    if (myMic) await updateDoc(doc(db, 'rooms', roomId, 'mics', myMic.id), { userMicFrame: item.imageUrl });
+                                  }
+                                } catch (e: any) {
+                                  alert('خطأ: ' + e.message);
+                                }
+                              }}
+                              className={`w-full py-1 rounded-lg text-[8px] font-bold transition ${isEquipped ? 'bg-gray-700 text-gray-400 cursor-default' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                              disabled={isEquipped}
+                            >
+                              {isEquipped ? 'مفعل' : 'تفعيل'}
+                            </button>
+                            
+                            {isEquipped && (
+                              <button 
+                                onClick={async () => {
+                                  if (!user) return;
+                                  try {
+                                    const updateData: any = {};
+                                    if (item.type === 'mic_frame') updateData.equippedMicFrame = null;
+                                    if (item.type === 'mic_icon') updateData.equippedMicIcon = null;
+                                    if (item.type === 'entrance') updateData.equippedEntrance = null;
+                                    if (item.type === 'chat_bubble') updateData.equippedBubble = null;
+                                    if (item.type === 'text_color') updateData.equippedTextColor = null;
+                                    if (item.type === 'room_background') updateData.equippedBackground = null;
+
+                                    await updateDoc(doc(db, 'users', user.uid), updateData);
+                                    
+                                    if (item.type === 'mic_frame') {
+                                      const myMic = mics.find(m => m.userId === user.uid);
+                                      if (myMic) await updateDoc(doc(db, 'rooms', roomId, 'mics', myMic.id), { userMicFrame: null });
+                                    }
+                                  } catch (e: any) {
+                                    alert('خطأ: ' + e.message);
+                                  }
+                                }}
+                                className="w-full py-1 bg-red-500/10 text-red-500 rounded-lg text-[8px] font-bold hover:bg-red-500/20 transition"
+                              >
+                                إلغاء التفعيل
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
-                    {Object.values(equippedItems).filter(v => v).length === 0 && (
+                    {purchasedItems.length === 0 && (
                       <div className="col-span-3 text-center text-gray-400 py-10">الحقيبة فارغة</div>
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-3 gap-4 pb-10">
                     {storeItems.filter(item => item.type === mallCategory).map(item => (
                     <div key={item.id} className="bg-gray-800/50 border border-gray-700 rounded-2xl p-3 flex flex-col items-center relative">
                       <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 relative flex items-center justify-center overflow-hidden">
@@ -1006,6 +1136,12 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
 
                               await updateDoc(doc(db, 'users', user.uid), updateData);
                               
+                              // Add to purchased items
+                              await addDoc(collection(db, 'users', user.uid, 'purchased_items'), {
+                                ...item,
+                                purchasedAt: Date.now()
+                              });
+
                               // Update mic if currently on it and it's a mic frame
                               if (item.type === 'mic_frame') {
                                 const myMic = mics.find(m => m.userId === user.uid);
@@ -1100,7 +1236,15 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               <div className="flex flex-col items-center -mt-12 mb-4">
                 <img src={selectedProfile.avatar} className="w-24 h-24 rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
                 <h3 className="text-xl font-bold text-white mt-2">{selectedProfile.name}</h3>
-                <p className="text-xs text-gray-400 mt-1">ID: {selectedProfile.uid.substring(0,8)}</p>
+                
+                <div className="mt-2 relative h-8 px-6 flex items-center justify-center overflow-hidden rounded-lg border border-white/10 group">
+                  {appIcons.idIcon && (
+                    <img src={appIcons.idIcon} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                  )}
+                  <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">
+                    ID: {selectedProfile.numericId || selectedProfile.uid.substring(0,8)}
+                  </span>
+                </div>
               </div>
               
               <div className="flex justify-center gap-4 mb-6">
@@ -1116,10 +1260,19 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
               
               <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 mb-6 min-h-[80px]">
                 <p className="text-[10px] text-gray-400 mb-3">الأوسمة</p>
-                <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg"><Star size={18} className="text-white"/></div>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg"><ShieldBan size={18} className="text-white"/></div>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg"><TrendingUp size={18} className="text-white"/></div>
+                <div className="flex flex-wrap gap-3">
+                  {selectedProfile.badges && selectedProfile.badges.length > 0 ? (
+                    selectedProfile.badges.map((badge: any) => (
+                      <div key={badge.id} className="group/badge relative">
+                        <img src={badge.imageUrl} alt={badge.name} className="w-10 h-10 object-contain hover:scale-110 transition drop-shadow-lg" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/badge:opacity-100 whitespace-nowrap pointer-events-none z-50">
+                          {badge.name}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 text-xs italic">لا توجد أوسمة حالياً</div>
+                  )}
                 </div>
               </div>
               
@@ -1136,138 +1289,6 @@ export default function LiveRoom({ roomId, onClose, onMinimize }: { roomId: stri
                 </button>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BackgroundSelector({ roomId, onClose }: { roomId: string, onClose: () => void }) {
-  const { user } = useAuth();
-  const [backgrounds, setBackgrounds] = useState<any[]>([]);
-  const [customUrl, setCustomUrl] = useState('');
-  const [customType, setCustomType] = useState('image');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isOwner, setIsOwner] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      getDoc(doc(db, 'rooms', roomId)).then(docSnap => {
-        if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
-          setIsOwner(true);
-        }
-      });
-    }
-
-    const q = query(collection(db, 'room_backgrounds'), orderBy('timestamp', 'desc'));
-    const unsub = onSnapshot(q, (snapshot) => {
-      setBackgrounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    return () => unsub();
-  }, [user, roomId]);
-
-  const handleSelect = async (bg: any) => {
-    if (!isOwner) return alert('عذراً، صاحب الغرفة فقط من يمكنه تغيير الخلفية');
-    setIsSaving(true);
-    try {
-      await updateDoc(doc(db, 'rooms', roomId), {
-        background: {
-          url: bg.url,
-          type: bg.type
-        }
-      });
-      onClose();
-    } catch (error: any) {
-      alert('خطأ في تعيين الخلفية: ' + error.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleCustomSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isOwner) return alert('عذراً، صاحب الغرفة فقط من يمكنه تغيير الخلفية');
-    if (!customUrl) return;
-    setIsSaving(true);
-    try {
-      await updateDoc(doc(db, 'rooms', roomId), {
-        background: {
-          url: customUrl,
-          type: customType
-        }
-      });
-      onClose();
-    } catch (error: any) {
-      alert('خطأ في تعيين الخلفية: ' + error.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!isOwner) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-6">
-        <ShieldAlert size={48} className="text-red-500 mb-4" />
-        <h3 className="text-lg font-bold text-white mb-2">صلاحية محدودة</h3>
-        <p className="text-gray-400 text-sm">عذراً، صاحب الغرفة فقط هو من يملك صلاحية تغيير الخلفية.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="mb-6">
-        <h4 className="text-sm font-bold text-gray-400 mb-3">رفع خلفية خاصة</h4>
-        <form onSubmit={handleCustomSubmit} className="flex gap-2">
-          <input 
-            type="text" 
-            value={customUrl} 
-            onChange={e => setCustomUrl(e.target.value)} 
-            placeholder="رابط الصورة أو الفيديو..." 
-            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none focus:border-purple-500"
-            dir="ltr"
-          />
-          <select 
-            value={customType} 
-            onChange={e => setCustomType(e.target.value)}
-            className="bg-black/40 border border-white/10 rounded-xl px-2 py-2 text-xs outline-none"
-          >
-            <option value="image">صورة</option>
-            <option value="video">فيديو</option>
-          </select>
-          <button 
-            type="submit" 
-            disabled={isSaving || !customUrl}
-            className="bg-purple-600 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50"
-          >
-            حفظ
-          </button>
-        </form>
-      </div>
-
-      <h4 className="text-sm font-bold text-gray-400 mb-3">اختر من المكتبة</h4>
-      <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-4 pb-10 hide-scrollbar">
-        {backgrounds.map(bg => (
-          <div 
-            key={bg.id} 
-            onClick={() => handleSelect(bg)}
-            className="relative rounded-2xl overflow-hidden aspect-video bg-gray-800 border border-white/5 cursor-pointer hover:border-purple-500 transition group"
-          >
-            {bg.type === 'video' ? (
-              <video src={bg.url} className="w-full h-full object-cover" muted />
-            ) : (
-              <img src={bg.url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            )}
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors"></div>
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1.5 text-[10px] text-center truncate">
-              {bg.name}
-            </div>
-          </div>
-        ))}
-        {backgrounds.length === 0 && (
-          <div className="col-span-2 text-center py-10 text-gray-500 text-sm">
-            لا توجد خلفيات في المكتبة حالياً
           </div>
         )}
       </div>

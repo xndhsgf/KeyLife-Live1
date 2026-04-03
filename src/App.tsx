@@ -18,6 +18,7 @@ function MainApp() {
   const [currentTab, setCurrentTab] = useState('home');
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [shownEntrances, setShownEntrances] = useState<Set<string>>(new Set());
   const { user } = useAuth();
 
   if (!user) {
@@ -25,7 +26,22 @@ function MainApp() {
   }
 
   if (activeRoomId && !isMinimized) {
-    return <LiveRoom roomId={activeRoomId} onClose={() => setActiveRoomId(null)} onMinimize={() => setIsMinimized(true)} />;
+    return (
+      <LiveRoom 
+        roomId={activeRoomId} 
+        hasShownEntrance={shownEntrances.has(activeRoomId)}
+        onEntranceShown={() => setShownEntrances(prev => new Set(prev).add(activeRoomId))}
+        onClose={() => {
+          setShownEntrances(prev => {
+            const next = new Set(prev);
+            next.delete(activeRoomId!);
+            return next;
+          });
+          setActiveRoomId(null);
+        }} 
+        onMinimize={() => setIsMinimized(true)} 
+      />
+    );
   }
 
   return (

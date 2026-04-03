@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, storage } from '../firebase';
-import { collection, getDocs, doc, updateDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, onSnapshot, query, orderBy, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Check, Image as ImageIcon, Link as LinkIcon, Upload, Loader2, ShoppingBag } from 'lucide-react';
+import { Plus, Check, Image as ImageIcon, Link as LinkIcon, Upload, Loader2, ShoppingBag, ShieldAlert } from 'lucide-react';
 
 export default function BackgroundSelector({ roomId, onClose }: { roomId: string, onClose: () => void }) {
   const { user } = useAuth();
@@ -13,9 +13,19 @@ export default function BackgroundSelector({ roomId, onClose }: { roomId: string
   const [currentBg, setCurrentBg] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Check if user is owner
+    if (user) {
+      getDoc(doc(db, 'rooms', roomId)).then(docSnap => {
+        if (docSnap.exists() && docSnap.data().ownerId === user.uid) {
+          setIsOwner(true);
+        }
+      });
+    }
+
     // Fetch official backgrounds
     const q = query(collection(db, 'room_backgrounds'), orderBy('createdAt', 'desc'));
     const unsubBgs = onSnapshot(q, (snapshot) => {
@@ -30,30 +40,20 @@ export default function BackgroundSelector({ roomId, onClose }: { roomId: string
     });
 
     // Fetch user's purchased backgrounds (from store_items)
-    // For now, we'll just show the one they have equipped in their profile
-    const unsubUser = onSnapshot(doc(db, 'users', user?.uid || 'none'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.equippedBackground) {
-          setPurchasedBackgrounds([{
-            id: 'equipped',
-            name: 'خلفيتي المشتراة',
-            url: data.equippedBackground
-          }]);
-        } else {
-          setPurchasedBackgrounds([]);
-        }
-      }
+    const unsubPurchased = onSnapshot(collection(db, 'users', user?.uid || 'none', 'purchased_items'), (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPurchasedBackgrounds(items.filter((item: any) => item.type === 'room_background'));
     });
 
     return () => {
       unsubBgs();
       unsubRoom();
-      unsubUser();
+      unsubPurchased();
     };
   }, [roomId, user?.uid]);
 
   const handleSelect = async (url: string) => {
+    if (!isOwner) return alert('عذراً، صاحب الغرفة فقط من يمكنه تغيير الخلفية');
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'rooms', roomId), {
@@ -99,6 +99,16 @@ export default function BackgroundSelector({ roomId, onClose }: { roomId: string
       setIsUploading(false);
     }
   };
+
+  if (!isOwner) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-6">
+        <ShieldAlert size={48} className="text-red-500 mb-4" />
+        <h3 className="text-lg font-bold text-white mb-2">صلاحية محدودة</h3>
+        <p className="text-gray-400 text-sm">عذراً، صاحب الغرفة فقط هو من يملك صلاحية تغيير الخلفية.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -172,16 +182,17 @@ export default function BackgroundSelector({ roomId, onClose }: { roomId: string
             </h4>
             <div className="grid grid-cols-2 gap-3">
               {purchasedBackgrounds.map((bg) => {
-                const isVideo = bg.url?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) != null;
+                const bgUrl = bg.url || bg.imageUrl;
+                const isVideo = bgUrl?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) != null;
                 return (
                   <div
                     key={bg.id}
-                    onClick={() => handleSelect(bg.url)}
-                    className={`relative aspect-video rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${currentBg === bg.url ? 'border-purple-500 scale-95' : 'border-transparent hover:border-white/20'}`}
+                    onClick={() => handleSelect(bgUrl)}
+                    className={`relative aspect-video rounded-xl overflow-hidden cursor-pointer border-2 transition-all ${currentBg === bgUrl ? 'border-purple-500 scale-95' : 'border-transparent hover:border-white/20'}`}
                   >
                     {isVideo ? (
                       <video
-                        src={bg.url}
+                        src={bgUrl}
                         className="w-full h-full object-cover"
                         muted
                         loop
@@ -192,10 +203,10 @@ export default function BackgroundSelector({ roomId, onClose }: { roomId: string
                         }}
                       />
                     ) : (
-                      <img src={bg.url} className="w-full h-full object-cover" alt={bg.name} />
+                      <img src={bgUrl} className="w-full h-full object-cover" alt={bg.name} />
                     )}
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      {currentBg === bg.url && (
+                      {currentBg === bgUrl && (
                         <div className="bg-purple-600 p-1.5 rounded-full shadow-lg">
                           <Check size={16} className="text-white" />
                         </div>

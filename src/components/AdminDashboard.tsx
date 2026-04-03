@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2 } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -63,6 +63,7 @@ export default function AdminDashboard() {
         <TabButton active={activeTab === 'store'} onClick={() => setActiveTab('store')} icon={<ShoppingBag size={18} />} label="المتجر (إطارات)" />
         <TabButton active={activeTab === 'icons'} onClick={() => setActiveTab('icons')} icon={<ImageIcon size={18} />} label="بنك الأيقونات" />
         <TabButton active={activeTab === 'giftBox'} onClick={() => setActiveTab('giftBox')} icon={<Gift size={18} />} label="صندوق الهدايا" />
+        <TabButton active={activeTab === 'badges'} onClick={() => setActiveTab('badges')} icon={<Star size={18} />} label="الأوسمة" />
         <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
         <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
         <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
@@ -80,6 +81,7 @@ export default function AdminDashboard() {
         {activeTab === 'store' && <StoreTab />}
         {activeTab === 'icons' && <IconsBankTab />}
         {activeTab === 'giftBox' && <GiftBoxTab />}
+        {activeTab === 'badges' && <BadgesTab />}
         {activeTab === 'diamonds' && <DiamondsTab />}
         {activeTab === 'mics' && <MicsTab />}
         {activeTab === 'banners' && <BannersTab />}
@@ -341,6 +343,7 @@ function StoreTab() {
 function IconsBankTab() {
   const [giftBoxIcon, setGiftBoxIcon] = useState('');
   const [micIcon, setMicIcon] = useState('');
+  const [idIcon, setIdIcon] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -351,6 +354,7 @@ function IconsBankTab() {
         const data = docSnap.data();
         setGiftBoxIcon(data.giftBoxIcon || '');
         setMicIcon(data.micIcon || '');
+        setIdIcon(data.idIcon || '');
       }
     };
     fetchIcons();
@@ -363,6 +367,7 @@ function IconsBankTab() {
       await setDoc(doc(db, 'settings', 'app_icons'), {
         giftBoxIcon,
         micIcon,
+        idIcon,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       alert('تم حفظ الأيقونات بنجاح!');
@@ -423,6 +428,29 @@ function IconsBankTab() {
           </div>
         </div>
 
+        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
+          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة/إطار الـ ID</label>
+          <div className="flex gap-4 items-start">
+            <div className="flex-1">
+              <input 
+                type="url" 
+                value={idIcon} 
+                onChange={e => setIdIcon(e.target.value)} 
+                placeholder="رابط صورة إطار الـ ID" 
+                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
+                dir="ltr" 
+              />
+              <p className="text-xs text-gray-500 mt-1">تظهر كخلفية لرقم الـ ID في بروفايل المستخدم.</p>
+            </div>
+            {idIcon && (
+              <div className="h-10 px-4 rounded-lg bg-gray-900 flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
+                <img src={idIcon} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                <span className="relative z-10 text-white text-xs font-mono font-bold">ID: 1234567</span>
+              </div>
+            )}
+          </div>
+        </div>
+
         <button 
           type="submit" 
           disabled={isSaving}
@@ -431,6 +459,172 @@ function IconsBankTab() {
           {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
         </button>
       </form>
+    </div>
+  );
+}
+
+function BadgesTab() {
+  const [badges, setBadges] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'badges'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setBadges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const storageRef = ref(storage, `badges/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      setImageUrl(downloadURL);
+      if (!name) setName(file.name.split('.')[0]);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAddBadge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !imageUrl) return alert('الرجاء تعبئة جميع الحقول');
+    
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, 'badges'), {
+        name,
+        imageUrl,
+        timestamp: Date.now()
+      });
+      setName('');
+      setImageUrl('');
+      alert('تم إضافة الوسام بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا الوسام؟')) {
+      await deleteDoc(doc(db, 'badges', id));
+    }
+  };
+
+  const [assignUserId, setAssignUserId] = useState('');
+  const [selectedBadge, setSelectedBadge] = useState<any>(null);
+
+  const handleAssignBadge = async () => {
+    if (!assignUserId || !selectedBadge) return alert('الرجاء إدخال ID المستخدم واختيار وسام');
+    
+    try {
+      // Find user by numericId
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef);
+      const querySnapshot = await getDocs(q);
+      const userDoc = querySnapshot.docs.find(doc => doc.data().numericId === assignUserId);
+      
+      if (!userDoc) return alert('المستخدم غير موجود');
+
+      const userData = userDoc.data();
+      const currentBadges = userData.badges || [];
+      
+      if (currentBadges.some((b: any) => b.id === selectedBadge.id)) {
+        return alert('المستخدم يملك هذا الوسام بالفعل');
+      }
+
+      await updateDoc(doc(db, 'users', userDoc.id), {
+        badges: [...currentBadges, { id: selectedBadge.id, name: selectedBadge.name, imageUrl: selectedBadge.imageUrl }]
+      });
+
+      alert(`تم منح وسام ${selectedBadge.name} للمستخدم ${userData.displayName} بنجاح`);
+      setAssignUserId('');
+      setSelectedBadge(null);
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4">إضافة وسام جديد</h2>
+        <form onSubmit={handleAddBadge} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">اسم الوسام</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: وسام الملك" />
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2">
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+            {isUploading ? (
+              <Loader2 size={24} className="text-purple-600 animate-spin" />
+            ) : (
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-50 transition shadow-sm">
+                <Upload size={18} className="text-purple-600" />
+                رفع صورة الوسام
+              </button>
+            )}
+            {imageUrl && <img src={imageUrl} className="w-16 h-16 object-contain mt-2" />}
+          </div>
+
+          <button type="submit" disabled={isSaving || isUploading} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
+            {isSaving ? 'جاري الإضافة...' : 'إضافة الوسام'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4">منح وسام لمستخدم</h2>
+        <div className="flex gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">ID المستخدم (الرقمي)</label>
+            <input type="text" value={assignUserId} onChange={e => setAssignUserId(e.target.value)} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="مثال: 1234567" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">اختر الوسام</label>
+            <select 
+              value={selectedBadge?.id || ''} 
+              onChange={e => setSelectedBadge(badges.find(b => b.id === e.target.value))}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-white"
+            >
+              <option value="">اختر وساماً...</option>
+              {badges.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <button onClick={handleAssignBadge} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition">
+            منح الوسام
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4">الأوسمة الحالية</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {badges.map(badge => (
+            <div key={badge.id} className="border border-gray-200 rounded-xl p-4 flex flex-col items-center relative">
+              <button onClick={() => handleDelete(badge.id)} className="absolute top-2 right-2 text-red-500 hover:bg-red-50 p-1 rounded-md transition">
+                <Trash2 size={16} />
+              </button>
+              <img src={badge.imageUrl} alt={badge.name} className="w-16 h-16 object-contain mb-2" />
+              <h3 className="font-bold text-sm text-center">{badge.name}</h3>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
