@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 const SYMBOLS = ['💎', '👑', '💍', '⚡', '🏺', '🦁'];
@@ -11,20 +11,29 @@ export default function ZeusSlots() {
   const [grid, setGrid] = useState<string[][]>(Array(4).fill(Array(5).fill('💎')));
   const [bet, setBet] = useState(100);
   const [winAmount, setWinAmount] = useState(0);
+  const [userDiamonds, setUserDiamonds] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsub = onSnapshot(userRef, (doc) => {
+      if (doc.exists()) {
+        setUserDiamonds(doc.data().diamonds || 0);
+      }
+    });
+    return () => unsub();
+  }, [user]);
 
   const handleSpin = async () => {
     if (spinning || !user) return;
     
-    const userRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userRef);
-    const diamonds = userDoc.data()?.diamonds || 0;
-    
-    if (diamonds < bet) {
+    if (userDiamonds < bet) {
       alert('رصيد الألماس غير كافٍ');
       return;
     }
 
-    await updateDoc(userRef, { diamonds: diamonds - bet });
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, { diamonds: userDiamonds - bet });
     setSpinning(true);
     setWinAmount(0);
 
@@ -71,6 +80,12 @@ export default function ZeusSlots() {
       <div className="bg-[url('https://picsum.photos/seed/zeus/800/600')] bg-cover bg-center absolute inset-0 opacity-20"></div>
       <div className="bg-black/60 absolute inset-0"></div>
       
+      {/* Balance Display */}
+      <div className="absolute top-4 right-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+        <span className="text-yellow-400 font-black text-sm">{userDiamonds.toLocaleString()}</span>
+        <span className="text-xs">💎</span>
+      </div>
+
       <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
         <div className="text-3xl sm:text-5xl mb-4 sm:mb-8 font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] tracking-wider">
           ZEUS SLOTS
@@ -93,10 +108,35 @@ export default function ZeusSlots() {
         <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-black/80 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-yellow-500/50 shadow-2xl gap-4 sm:gap-0">
           <div className="flex flex-col items-center bg-gray-900 p-2 sm:p-3 rounded-xl border border-gray-700 w-full sm:w-auto">
             <span className="text-gray-400 text-[10px] sm:text-xs mb-1 uppercase tracking-wider">الرهان</span>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-2">
               <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-full font-bold hover:bg-gray-600">-</button>
-              <span className="font-black text-xl sm:text-2xl text-white w-12 sm:w-16 text-center">{bet}</span>
+              <input 
+                type="number" 
+                value={bet} 
+                onChange={(e) => setBet(Math.max(10, parseInt(e.target.value) || 10))} 
+                disabled={spinning}
+                className="w-16 sm:w-20 bg-transparent text-xl sm:text-2xl font-black text-center text-white outline-none border-b-2 border-yellow-500/50 focus:border-yellow-400"
+              />
               <button onClick={() => setBet(bet + 10)} disabled={spinning} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-full font-bold hover:bg-gray-600">+</button>
+            </div>
+            <div className="flex gap-1 overflow-x-auto hide-scrollbar py-1">
+              {[10, 100, 500, 1000].map(amount => (
+                <button
+                  key={amount}
+                  onClick={() => setBet(amount)}
+                  disabled={spinning}
+                  className={`px-2 py-1 rounded-lg text-[8px] font-black transition-all border ${bet === amount ? 'bg-yellow-500 text-black border-yellow-400' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+                >
+                  {amount}
+                </button>
+              ))}
+              <button
+                onClick={() => setBet(userDiamonds)}
+                disabled={spinning}
+                className={`px-2 py-1 rounded-lg text-[8px] font-black transition-all border ${bet === userDiamonds ? 'bg-red-500 text-white border-red-400' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+              >
+                الكل
+              </button>
             </div>
           </div>
 
@@ -119,3 +159,4 @@ export default function ZeusSlots() {
     </div>
   );
 }
+

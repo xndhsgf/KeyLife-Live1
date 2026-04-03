@@ -62,6 +62,7 @@ export default function AdminDashboard() {
       case 'agencies': return <AgenciesTab />;
       case 'vip': return <VIPTab />;
       case 'gift_categories': return <GiftCategoriesTab />;
+      case 'login_settings': return <LoginSettingsTab />;
       case 'mics': return <MicsTab />;
       case 'banners': return <BannersTab />;
       case 'cp': return <CPTab />;
@@ -96,6 +97,7 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('agencies')} icon={<Briefcase size={24} />} label="وكالات الشحن" />
           <TabCard onClick={() => setActiveTab('vip')} icon={<Crown size={24} />} label="نظام VIP" />
           <TabCard onClick={() => setActiveTab('gift_categories')} icon={<List size={24} />} label="أقسام الهدايا" />
+          <TabCard onClick={() => setActiveTab('login_settings')} icon={<Layout size={24} />} label="إعدادات صفحة الدخول" />
           <TabCard onClick={() => setActiveTab('mics')} icon={<Mic size={24} />} label="إدارة المايكات" />
           <TabCard onClick={() => setActiveTab('banners')} icon={<ImageIcon size={24} />} label="البنرات" />
           <TabCard onClick={() => setActiveTab('cp')} icon={<Users size={24} />} label="إعدادات الـ CP" />
@@ -742,6 +744,14 @@ function AddGiftTab() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTarget, setUploadTarget] = useState<'image' | 'animation' | 'audio'>('image');
+  const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'gift_categories'), (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -809,6 +819,9 @@ function AddGiftTab() {
             <select value={category} onChange={e => setCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
               <option value="classic">كلاسيك (عادية)</option>
               <option value="lucky">هدايا الحظ</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -932,6 +945,7 @@ function GamesTabOld() {
   const [giftEffect, setGiftEffect] = useState('normal');
   const [hasAnimation, setHasAnimation] = useState(true);
   const [animationSize, setAnimationSize] = useState('normal');
+  const [giftSize, setGiftSize] = useState('50');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1005,12 +1019,13 @@ function GamesTabOld() {
         giftEffect,
         hasAnimation,
         animationSize,
+        giftSize: Number(giftSize),
         category: 'lucky',
         createdAt: new Date().toISOString()
       });
       alert('تم إضافة هدية الحظ بنجاح!');
       setName(''); setDescription(''); setImageUrl(''); setLink(''); setAudioUrl(''); setValue(''); setDuration('6');
-      setWinProbability('20'); setWinMultiplier('5'); setGiftEffect('normal'); setHasAnimation(true); setAnimationSize('normal');
+      setWinProbability('20'); setWinMultiplier('5'); setGiftEffect('normal'); setHasAnimation(true); setAnimationSize('normal'); setGiftSize('50');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
     } finally {
@@ -1107,7 +1122,7 @@ function GamesTabOld() {
             )}
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">قيمة الهدية (ألماس)</label>
             <input type="number" value={value} onChange={e => setValue(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="0" />
@@ -1116,27 +1131,38 @@ function GamesTabOld() {
             <label className="block text-sm font-medium text-gray-700 mb-1">مدة ظهور الهدية (بالثواني)</label>
             <input type="number" value={duration} onChange={e => setDuration(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" />
           </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">نسبة الفوز (%)</label>
             <input type="number" value={winProbability} onChange={e => setWinProbability(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="0" max="100" />
             <p className="text-[10px] text-gray-500 mt-1">مثال: 20 يعني 20% فوز</p>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">مضاعف الربح (عند الفوز)</label>
+            <input type="number" value={winMultiplier} onChange={e => setWinMultiplier(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" step="0.1" />
+            <p className="text-[10px] text-gray-500 mt-1">مثال: 5 يعني إذا فاز المستخدم سيربح (قيمة الهدية × 5)</p>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">مضاعف الربح (عند الفوز)</label>
-          <input type="number" value={winMultiplier} onChange={e => setWinMultiplier(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none" required min="1" step="0.1" />
-          <p className="text-[10px] text-gray-500 mt-1">مثال: 5 يعني إذا فاز المستخدم سيربح (قيمة الهدية × 5)</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">تأثير الهدية (للهدايا الحظ)</label>
-          <select value={giftEffect} onChange={e => setGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none">
-            <option value="normal">عادي (تكبير وتصغير)</option>
-            <option value="shake">اهتزازي (Shaking)</option>
-            <option value="pulse">نبضي (Pulse)</option>
-            <option value="spin">دوران (Spin)</option>
-            <option value="bounce">قفز (Bounce)</option>
-            <option value="zoom_mic">زوم على المايك (Zoom to Mic)</option>
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">تأثير الهدية (للهدايا الحظ)</label>
+            <select value={giftEffect} onChange={e => setGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none">
+              <option value="normal">عادي (تكبير وتصغير)</option>
+              <option value="shake">اهتزازي (Shaking)</option>
+              <option value="pulse">نبضي (Pulse)</option>
+              <option value="spin">دوران (Spin)</option>
+              <option value="bounce">قفز (Bounce)</option>
+              <option value="zoom_mic">زوم على المايك (Zoom to Mic)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">حجم الهدية (0-100)</label>
+            <div className="flex items-center gap-4">
+              <input type="range" min="10" max="100" value={giftSize} onChange={e => setGiftSize(e.target.value)} className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+              <span className="text-sm font-bold text-purple-600 w-8">{giftSize}</span>
+            </div>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">حجم تأثير الهدية على الشاشة (الأنيميشن)</label>
@@ -1203,8 +1229,17 @@ function GiftBoxTab() {
   const [editDuration, setEditDuration] = useState('6');
   const [editHasAnimation, setEditHasAnimation] = useState(true);
   const [editAnimationSize, setEditAnimationSize] = useState('normal');
+  const [editGiftSize, setEditGiftSize] = useState('50');
   const [editCategory, setEditCategory] = useState('classic');
   const [editGiftEffect, setEditGiftEffect] = useState('none');
+  const [categories, setCategories] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'gift_categories'), (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const fetchGifts = async () => {
@@ -1232,6 +1267,7 @@ function GiftBoxTab() {
     setEditDuration(gift.duration?.toString() || '6');
     setEditHasAnimation(gift.hasAnimation !== false);
     setEditAnimationSize(gift.animationSize || 'normal');
+    setEditGiftSize(gift.giftSize?.toString() || '50');
     setEditCategory(gift.category || 'classic');
     setEditGiftEffect(gift.giftEffect || 'none');
   };
@@ -1254,6 +1290,7 @@ function GiftBoxTab() {
         duration: Number(editDuration),
         hasAnimation: editHasAnimation,
         animationSize: editAnimationSize,
+        giftSize: Number(editGiftSize),
         category: editCategory,
         giftEffect: editGiftEffect,
         updatedAt: new Date().toISOString()
@@ -1309,6 +1346,9 @@ function GiftBoxTab() {
                   <select value={editCategory} onChange={e => setEditCategory(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
                     <option value="classic">كلاسيك (عادية)</option>
                     <option value="lucky">هدايا الحظ</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1391,6 +1431,13 @@ function GiftBoxTab() {
                     <option value="large">كبير</option>
                     <option value="fullscreen">شاشة كاملة</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">حجم الهدية (0-100)</label>
+                  <div className="flex items-center gap-4">
+                    <input type="range" min="10" max="100" value={editGiftSize} onChange={e => setEditGiftSize(e.target.value)} className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600" />
+                    <span className="text-sm font-bold text-purple-600 w-8">{editGiftSize}</span>
+                  </div>
                 </div>
                 {editCategory === 'lucky' && (
                   <div>
@@ -2245,6 +2292,170 @@ function VIPTab() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function LoginSettingsTab() {
+  const [logoUrl, setLogoUrl] = useState('');
+  const [backgroundUrl, setBackgroundUrl] = useState('');
+  const [isBackgroundVideo, setIsBackgroundVideo] = useState(false);
+  const [avatars, setAvatars] = useState<string[]>([]);
+  const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTarget, setUploadTarget] = useState<'logo' | 'background' | 'avatar'>('logo');
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const docSnap = await getDoc(doc(db, 'settings', 'login_page'));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setLogoUrl(data.logoUrl || '');
+        setBackgroundUrl(data.backgroundUrl || '');
+        setIsBackgroundVideo(data.isBackgroundVideo || false);
+        setAvatars(data.avatars || []);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const folder = uploadTarget === 'logo' ? 'app_logos' : (uploadTarget === 'background' ? 'login_backgrounds' : 'user_avatars');
+      const storageRef = ref(storage, `${folder}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      if (uploadTarget === 'logo') setLogoUrl(downloadURL);
+      else if (uploadTarget === 'background') setBackgroundUrl(downloadURL);
+      else if (uploadTarget === 'avatar') setNewAvatarUrl(downloadURL);
+    } catch (error: any) {
+      alert('خطأ في الرفع: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    try {
+      await setDoc(doc(db, 'settings', 'login_page'), {
+        logoUrl,
+        backgroundUrl,
+        isBackgroundVideo,
+        avatars,
+        updatedAt: new Date().toISOString()
+      });
+      alert('تم حفظ الإعدادات بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const addAvatar = () => {
+    if (!newAvatarUrl) return;
+    setAvatars([...avatars, newAvatarUrl]);
+    setNewAvatarUrl('');
+  };
+
+  const removeAvatar = (index: number) => {
+    setAvatars(avatars.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-6 text-gray-800">إعدادات صفحة تسجيل الدخول</h2>
+        
+        <div className="space-y-6">
+          {/* Logo Section */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">لوجو التطبيق (رابط)</label>
+            <div className="flex gap-2">
+              <input type="url" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" placeholder="https://..." />
+              <button onClick={() => { setUploadTarget('logo'); fileInputRef.current?.click(); }} className="bg-gray-100 px-4 rounded-lg hover:bg-gray-200 transition flex items-center gap-2">
+                <Upload size={18} /> رفع
+              </button>
+            </div>
+            {logoUrl && (
+              <div className="mt-2 w-24 h-24 rounded-xl border border-gray-200 overflow-hidden bg-gray-50 flex items-center justify-center p-2">
+                <img src={logoUrl} className="max-w-full max-h-full object-contain" />
+              </div>
+            )}
+          </div>
+
+          {/* Background Section */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">خلفية الصفحة (صورة أو فيديو)</label>
+            <div className="flex gap-2 mb-2">
+              <input type="url" value={backgroundUrl} onChange={e => setBackgroundUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" placeholder="https://..." />
+              <button onClick={() => { setUploadTarget('background'); fileInputRef.current?.click(); }} className="bg-gray-100 px-4 rounded-lg hover:bg-gray-200 transition flex items-center gap-2">
+                <Upload size={18} /> رفع
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mb-4">
+              <input type="checkbox" id="isVideo" checked={isBackgroundVideo} onChange={e => setIsBackgroundVideo(e.target.checked)} className="w-4 h-4 text-purple-600 rounded" />
+              <label htmlFor="isVideo" className="text-sm text-gray-700 cursor-pointer font-medium">الرابط المرفوع هو فيديو (MP4)</label>
+            </div>
+            {backgroundUrl && (
+              <div className="mt-2 w-full h-40 rounded-xl border border-gray-200 overflow-hidden bg-black relative">
+                {isBackgroundVideo ? (
+                  <video src={backgroundUrl} className="w-full h-full object-cover" autoPlay muted loop />
+                ) : (
+                  <img src={backgroundUrl} className="w-full h-full object-cover" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-white text-xs font-bold">معاينة الخلفية</div>
+              </div>
+            )}
+          </div>
+
+          {/* Avatars Section */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">بنك الصور الرمزية (Avatars) للمستخدمين الجدد</label>
+            <div className="flex gap-2 mb-4">
+              <input type="url" value={newAvatarUrl} onChange={e => setNewAvatarUrl(e.target.value)} className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" dir="ltr" placeholder="رابط صورة رمزية جديدة..." />
+              <button onClick={() => { setUploadTarget('avatar'); fileInputRef.current?.click(); }} className="bg-gray-100 px-4 rounded-lg hover:bg-gray-200 transition">
+                <Upload size={18} />
+              </button>
+              <button onClick={addAvatar} className="bg-purple-600 text-white px-4 rounded-lg hover:bg-purple-700 transition font-bold">إضافة</button>
+            </div>
+            
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3">
+              {avatars.map((url, index) => (
+                <div key={index} className="relative group aspect-square rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                  <img src={url} className="w-full h-full object-cover" />
+                  <button onClick={() => removeAvatar(index)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept={uploadTarget === 'background' && isBackgroundVideo ? "video/*" : "image/*"} />
+          
+          {isUploading && (
+            <div className="flex items-center gap-2 text-purple-600 text-sm font-bold bg-purple-50 p-3 rounded-xl">
+              <Loader2 size={18} className="animate-spin" />
+              جاري رفع الملف إلى السيرفر...
+            </div>
+          )}
+
+          <div className="pt-4 border-t border-gray-100">
+            <button onClick={handleSaveSettings} disabled={isSaving || isUploading} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50">
+              {isSaving ? 'جاري الحفظ...' : 'حفظ جميع الإعدادات'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

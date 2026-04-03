@@ -20,7 +20,7 @@ function MainApp() {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [shownEntrances, setShownEntrances] = useState<Set<string>>(new Set());
-  const { user } = useAuth();
+  const { user, isProfileComplete } = useAuth();
 
   useEffect(() => {
     initBackTrap();
@@ -41,7 +41,7 @@ function MainApp() {
     return () => unregisterBackHandler(handleBack);
   }, [activeRoomId, isMinimized, currentTab]);
 
-  if (!user) {
+  if (!user || !isProfileComplete) {
     return <LoginScreen />;
   }
 

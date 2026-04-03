@@ -51,6 +51,7 @@ export default function LiveRoom({
   const [settings, setSettings] = useState({ maxMics: 8, allowMovement: true });
   const [mics, setMics] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
+  const [giftCategories, setGiftCategories] = useState<any[]>([]);
   const [storeItems, setStoreItems] = useState<any[]>([]);
   const [vipLevels, setVipLevels] = useState<any[]>([]);
   const [userData, setUserData] = useState<any>(null);
@@ -64,7 +65,7 @@ export default function LiveRoom({
   const [showCpChat, setShowCpChat] = useState(false);
   const [cpMessages, setCpMessages] = useState<any[]>([]);
   const [selectedGift, setSelectedGift] = useState<any>(null);
-  const [giftCategory, setGiftCategory] = useState<'classic' | 'lucky'>('classic');
+  const [giftCategory, setGiftCategory] = useState<string>('classic');
   const [giftQuantity, setGiftQuantity] = useState(1);
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [userDiamonds, setUserDiamonds] = useState(0);
@@ -163,6 +164,10 @@ export default function LiveRoom({
       setGifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubGiftCategories = onSnapshot(collection(db, 'gift_categories'), (snapshot) => {
+      setGiftCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubVip = onSnapshot(collection(db, 'vip_levels'), (snapshot) => {
       setVipLevels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -219,7 +224,7 @@ export default function LiveRoom({
       setCpMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
   }, [user]);
 
   // Handle entrance effect on join
@@ -363,6 +368,7 @@ export default function LiveRoom({
             giftImageUrl: gift.imageUrl, 
             giftAnimationUrl: gift.link || gift.imageUrl,
             giftAnimationSize: gift.animationSize || 'normal',
+            giftSize: gift.giftSize || null,
             giftAudioUrl: gift.audioUrl || null,
             giftDuration: gift.duration || 6,
             giftName: gift.name, 
@@ -398,7 +404,8 @@ export default function LiveRoom({
                 receiverName: receiverData.displayName || 'مستخدم', 
                 giftImageUrl: gift.imageUrl, 
                 giftAnimationUrl: gift.link || gift.imageUrl,
-                giftAnimationSize: 'small', // Small for lucky gifts on mics
+                giftAnimationSize: gift.animationSize || 'small',
+                giftSize: gift.giftSize || null,
                 giftAudioUrl: gift.audioUrl || null,
                 giftDuration: gift.duration || 3,
                 giftName: gift.name, 
@@ -612,11 +619,17 @@ export default function LiveRoom({
                 const isLarge = event.giftAnimationSize === 'large';
                 const isLucky = event.giftCategory === 'lucky';
                 
+                // Use custom giftSize if available, otherwise fallback to defaults
+                const giftSize = event.giftSize || (isFullscreen ? 100 : (isLarge ? 80 : 60));
+                const sizePx = isFullscreen ? '100%' : `${(giftSize / 100) * 400}px`;
+
+                const mediaStyle: React.CSSProperties = isFullscreen 
+                  ? { width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }
+                  : { width: sizePx, height: sizePx };
+
                 const mediaClass = isFullscreen 
-                  ? "absolute inset-0 w-full h-full object-cover z-0" 
-                  : isLarge 
-                    ? "w-96 h-96 object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]"
-                    : "w-64 h-64 object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]";
+                  ? "object-cover z-0" 
+                  : "object-contain z-0 drop-shadow-[0_0_50px_rgba(255,255,255,0.6)]";
 
                 // Lucky gift animation: start center, move to mic
                 let animationProps: any = isFullscreen 
@@ -674,6 +687,7 @@ export default function LiveRoom({
                         playsInline 
                         src={mediaUrl || undefined} 
                         className={`${mediaClass} ${effectClass}`} 
+                        style={mediaStyle}
                         {...animationProps}
                         onLoadedData={(e) => {
                           e.currentTarget.play().catch(err => console.error("Video play error:", err));
@@ -683,7 +697,7 @@ export default function LiveRoom({
                         }}
                       />
                     ) : (
-                      <motion.img key={mediaUrl} src={mediaUrl || undefined} className={`${mediaClass} ${effectClass}`} {...animationProps} />
+                      <motion.img key={mediaUrl} src={mediaUrl || undefined} className={`${mediaClass} ${effectClass}`} style={mediaStyle} {...animationProps} />
                     )}
                   </>
                 );
@@ -1061,20 +1075,29 @@ export default function LiveRoom({
                 </div>
 
                 {/* Gift Categories Tabs */}
-                <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/5">
+                <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto hide-scrollbar">
                   <button 
                     onClick={() => setGiftCategory('classic')}
-                    className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     هدايا عادية
                   </button>
                   <button 
                     onClick={() => setGiftCategory('lucky')}
-                    className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     <Star size={14} className={giftCategory === 'lucky' ? 'text-yellow-400' : ''} />
                     هدايا الحظ
                   </button>
+                  {giftCategories.map(cat => (
+                    <button 
+                      key={cat.id}
+                      onClick={() => setGiftCategory(cat.id)}
+                      className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === cat.id ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Gifts Grid */}

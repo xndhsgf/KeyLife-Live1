@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { calculateLevel, getProgressToNextLevel } from '../lib/levels';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
+import MallModal from './MallModal';
 
 export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void }) {
   const { user, logout, updateUserProfile } = useAuth();
@@ -19,18 +20,20 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   const [appIcons, setAppIcons] = useState<{idIcon?: string}>({});
   const [showGameCenter, setShowGameCenter] = useState(false);
   const [showAgencyPanel, setShowAgencyPanel] = useState(false);
+  const [showMall, setShowMall] = useState(false);
 
   useEffect(() => {
     const handleBack = () => {
       if (showGameCenter) { setShowGameCenter(false); return true; }
       if (showAgencyPanel) { setShowAgencyPanel(false); return true; }
+      if (showMall) { setShowMall(false); return true; }
       if (isEditing) { setIsEditing(false); return true; }
       return false;
     };
 
     registerBackHandler(handleBack);
     return () => unregisterBackHandler(handleBack);
-  }, [isEditing]);
+  }, [isEditing, showGameCenter, showAgencyPanel, showMall]);
 
   useEffect(() => {
     if (user) {
@@ -88,8 +91,8 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   };
   
   const menuItems = [
-    { icon: <Crown size={20} />, label: 'VIP', color: 'text-yellow-500', bg: 'bg-yellow-50' },
-    { icon: <ShoppingBag size={20} />, label: 'المول', color: 'text-pink-500', bg: 'bg-pink-50' },
+    { icon: <Crown size={20} />, label: 'VIP', color: 'text-yellow-500', bg: 'bg-yellow-50', action: () => setShowMall(true) },
+    { icon: <ShoppingBag size={20} />, label: 'المول', color: 'text-pink-500', bg: 'bg-pink-50', action: () => setShowMall(true) },
     { icon: <TrendingUp size={20} />, label: 'مستوى الشحن', color: 'text-cyan-500', bg: 'bg-cyan-50', value: `Lv. ${chargingLevel}`, progress: chargingProgress },
     { icon: <Award size={20} />, label: 'مستوى الدعم', color: 'text-purple-500', bg: 'bg-purple-50', value: `Lv. ${supportLevel}`, progress: supportProgress },
     { icon: <Wallet size={20} />, label: 'المحفظة', color: 'text-orange-500', bg: 'bg-orange-50', value: `${(userData?.diamonds || 0).toLocaleString()} 💎` },

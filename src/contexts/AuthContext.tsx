@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { auth, loginWithGoogle, loginWithEmail as firebaseLoginWithEmail, signupWithEmail as firebaseSignupWithEmail, logout as firebaseLogout, db } from '../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
+  isProfileComplete: boolean;
   loading: boolean;
   login: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
@@ -17,10 +18,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    let unsubscribeSnapshot: () => void;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       
       if (currentUser) {
@@ -55,14 +59,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await setDoc(userRef, { numericId }, { merge: true });
             }
           }
+
+          // Listen to user document to check if profile is complete
+          unsubscribeSnapshot = onSnapshot(userRef, (doc) => {
+            if (doc.exists()) {
+              const data = doc.data();
+              // Profile is complete if country, gender, and age exist
+              setIsProfileComplete(!!(data.country && data.gender && data.age));
+            } else {
+              setIsProfileComplete(false);
+            }
+            setLoading(false);
+          });
+
         } catch (error) {
           console.error("Error creating user document:", error);
+          setLoading(false);
         }
+      } else {
+        setIsProfileComplete(false);
+        setLoading(false);
+        if (unsubscribeSnapshot) unsubscribeSnapshot();
       }
-      
-      setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
   const login = async () => {
@@ -136,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginWithEmail, signupWithEmail, logout, updateUserProfile }}>
+    <AuthContext.Provider value={{ user, isProfileComplete, loading, login, loginWithEmail, signupWithEmail, logout, updateUserProfile }}>
       {!loading && children}
     </AuthContext.Provider>
   );
@@ -147,3 +171,4 @@ export const useAuth = () => {
   if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };
+

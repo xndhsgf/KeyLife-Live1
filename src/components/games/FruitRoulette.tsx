@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 const ITEMS = [
@@ -19,22 +19,30 @@ export default function FruitRoulette() {
   const [bet, setBet] = useState(100);
   const [selectedItem, setSelectedItem] = useState('apple');
   const [rotation, setRotation] = useState(0);
+  const [userDiamonds, setUserDiamonds] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsub = onSnapshot(userRef, (doc) => {
+      if (doc.exists()) {
+        setUserDiamonds(doc.data().diamonds || 0);
+      }
+    });
+    return () => unsub();
+  }, [user]);
 
   const handleSpin = async () => {
     if (spinning || !user) return;
     
-    // Check balance
-    const userRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userRef);
-    const diamonds = userDoc.data()?.diamonds || 0;
-    
-    if (diamonds < bet) {
+    if (userDiamonds < bet) {
       alert('رصيد الألماس غير كافٍ');
       return;
     }
 
+    const userRef = doc(db, 'users', user.uid);
     // Deduct bet
-    await updateDoc(userRef, { diamonds: diamonds - bet });
+    await updateDoc(userRef, { diamonds: userDiamonds - bet });
 
     setSpinning(true);
     setResult(null);
@@ -79,8 +87,14 @@ export default function FruitRoulette() {
       <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/casino/800/600')] bg-cover bg-center opacity-20"></div>
       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80"></div>
       
+      {/* Balance Display */}
+      <div className="absolute top-4 right-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-yellow-500/30 flex items-center gap-2 shadow-lg">
+        <span className="text-yellow-400 font-black text-sm">{userDiamonds.toLocaleString()}</span>
+        <span className="text-xs">💎</span>
+      </div>
+
       <div className="relative z-10 flex flex-col items-center w-full max-w-md">
-        <div className="relative w-48 h-48 sm:w-64 sm:h-64 mb-8 sm:mb-12">
+        <div className="relative w-48 h-48 sm:w-64 sm:h-64 mb-6 sm:mb-8">
           {/* Pointer */}
           <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-6 h-8 bg-yellow-400 z-20 shadow-lg" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }}></div>
           
@@ -106,7 +120,7 @@ export default function FruitRoulette() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8 w-full">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 w-full">
           {ITEMS.map(item => (
             <button 
               key={item.id}
@@ -120,11 +134,39 @@ export default function FruitRoulette() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8 bg-black/50 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/10 w-full justify-center">
-          <span className="text-gray-400 text-xs sm:text-sm">الرهان:</span>
-          <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">-</button>
-          <span className="text-lg sm:text-2xl font-bold w-16 sm:w-24 text-center text-yellow-400">{bet} 💎</span>
-          <button onClick={() => setBet(bet + 10)} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">+</button>
+        <div className="w-full space-y-3 mb-6 sm:mb-8">
+          <div className="flex items-center gap-2 sm:gap-4 bg-black/50 p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-white/10 w-full justify-center">
+            <span className="text-gray-400 text-xs sm:text-sm">الرهان:</span>
+            <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">-</button>
+            <input 
+              type="number" 
+              value={bet} 
+              onChange={(e) => setBet(Math.max(10, parseInt(e.target.value) || 10))} 
+              disabled={spinning}
+              className="w-20 sm:w-28 bg-transparent text-lg sm:text-2xl font-bold text-center text-yellow-400 outline-none border-b-2 border-yellow-500/50 focus:border-yellow-400"
+            />
+            <button onClick={() => setBet(bet + 10)} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">+</button>
+          </div>
+
+          <div className="flex justify-center gap-2 overflow-x-auto hide-scrollbar py-1">
+            {[10, 100, 500, 1000, 5000].map(amount => (
+              <button
+                key={amount}
+                onClick={() => setBet(amount)}
+                disabled={spinning}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${bet === amount ? 'bg-yellow-500 text-black border-yellow-400' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+              >
+                {amount}
+              </button>
+            ))}
+            <button
+              onClick={() => setBet(userDiamonds)}
+              disabled={spinning}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${bet === userDiamonds ? 'bg-red-500 text-white border-red-400' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+            >
+              الكل
+            </button>
+          </div>
         </div>
 
         <button 
