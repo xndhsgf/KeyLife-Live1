@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Home, Compass, MessageSquare, User as UserIcon, Mic, Shield, Maximize2 } from 'lucide-react';
 import HomePage from './components/HomePage';
 import DiscoverPage from './components/DiscoverPage';
@@ -13,6 +13,7 @@ import LiveRoom from './components/LiveRoom';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { initBackTrap, registerBackHandler, unregisterBackHandler } from './hooks/useBackButton';
 
 function MainApp() {
   const [currentTab, setCurrentTab] = useState('home');
@@ -20,6 +21,25 @@ function MainApp() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [shownEntrances, setShownEntrances] = useState<Set<string>>(new Set());
   const { user } = useAuth();
+
+  useEffect(() => {
+    initBackTrap();
+
+    const handleBack = () => {
+      if (activeRoomId && !isMinimized) {
+        setIsMinimized(true);
+        return true;
+      }
+      if (currentTab !== 'home') {
+        setCurrentTab('home');
+        return true;
+      }
+      return true; // Always trap
+    };
+
+    registerBackHandler(handleBack);
+    return () => unregisterBackHandler(handleBack);
+  }, [activeRoomId, isMinimized, currentTab]);
 
   if (!user) {
     return <LoginScreen />;

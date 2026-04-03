@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert } from 'lucide-react';
+import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { calculateLevel } from '../lib/levels';
 import BackgroundSelector from './BackgroundSelector';
+import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
+import GameCenterModal from './games/GameCenterModal';
 
 export default function LiveRoom({ 
   roomId, 
@@ -28,7 +30,9 @@ export default function LiveRoom({
   const [showExitModal, setShowExitModal] = useState(false);
   const [showMallModal, setShowMallModal] = useState(false);
   const [showLuckyBoxModal, setShowLuckyBoxModal] = useState(false);
+  const [showGameCenter, setShowGameCenter] = useState(false);
   const [bigWinConfig, setBigWinConfig] = useState<any>(null);
+  const [room, setRoom] = useState<any>({});
 
   useEffect(() => {
     const fetchBigWinConfig = async () => {
@@ -67,6 +71,23 @@ export default function LiveRoom({
   const mountTime = useRef(Date.now());
   const entranceTriggeredRef = useRef(false);
 
+  useEffect(() => {
+    const handleBack = () => {
+      if (showAdminTools) { setShowAdminTools(false); return true; }
+      if (showBackgroundModal) { setShowBackgroundModal(false); return true; }
+      if (showGiftModal) { setShowGiftModal(false); return true; }
+      if (showExitModal) { setShowExitModal(false); return true; }
+      if (showMallModal) { setShowMallModal(false); return true; }
+      if (showLuckyBoxModal) { setShowLuckyBoxModal(false); return true; }
+      if (showGameCenter) { setShowGameCenter(false); return true; }
+      if (selectedProfile) { setSelectedProfile(null); return true; }
+      return false;
+    };
+
+    registerBackHandler(handleBack);
+    return () => unregisterBackHandler(handleBack);
+  }, [showAdminTools, showBackgroundModal, showGiftModal, showExitModal, showMallModal, showLuckyBoxModal, selectedProfile]);
+
   // Fetch data
   useEffect(() => {
     if (!user) return;
@@ -99,7 +120,16 @@ export default function LiveRoom({
     const unsubRoom = onSnapshot(doc(db, 'rooms', roomId), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
+        
+        // Check if user is banned
+        if (data.bannedUsers && data.bannedUsers.includes(user.uid)) {
+          alert('لقد تم حظرك من هذه الغرفة.');
+          onClose();
+          return;
+        }
+        
         setRoomBackground(data.backgroundUrl || null);
+        setRoom(data);
       }
     });
 
@@ -220,7 +250,12 @@ export default function LiveRoom({
           totalSpent: userData.totalSpent || 0,
           totalSupport: userData.totalSupport || 0,
           numericId: userData.numericId,
-          badges: userData.badges || []
+          badges: userData.badges || [],
+          cpPartnerId: userData.cpPartnerId,
+          cpPartnerName: userData.cpPartnerName,
+          cpPartnerAvatar: userData.cpPartnerAvatar,
+          equippedCpFrame: userData.equippedCpFrame,
+          cpBackground: userData.cpBackground
         });
       }
       return;
@@ -557,7 +592,7 @@ export default function LiveRoom({
               {/* Text Banner */}
               <div className="bg-gradient-to-r from-purple-600/80 to-pink-500/80 px-6 py-2 rounded-full backdrop-blur-md mb-8 border border-white/20 shadow-[0_0_30px_rgba(236,72,153,0.5)] z-10 absolute top-1/4">
                 <span className="text-yellow-300 font-bold">{event.senderName}</span>
-                <span className="mx-2 text-white">أرسل {event.giftName} إلى</span>
+                <span className="mx-2 text-white">أرسل إلى</span>
                 <span className="text-pink-300 font-bold">{event.receiverName}</span>
               </div>
             </motion.div>
@@ -655,7 +690,12 @@ export default function LiveRoom({
                         totalSpent: userData.totalSpent || 0,
                         totalSupport: userData.totalSupport || 0,
                         numericId: userData.numericId,
-                        badges: userData.badges || []
+                        badges: userData.badges || [],
+                        cpPartnerId: userData.cpPartnerId,
+                        cpPartnerName: userData.cpPartnerName,
+                        cpPartnerAvatar: userData.cpPartnerAvatar,
+                        equippedCpFrame: userData.equippedCpFrame,
+                        cpBackground: userData.cpBackground
                       });
                     }}
                     className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1 cursor-pointer hover:underline`}
@@ -730,7 +770,12 @@ export default function LiveRoom({
                   totalSpent: userData.totalSpent || 0,
                   totalSupport: userData.totalSupport || 0,
                   numericId: userData.numericId,
-                  badges: userData.badges || []
+                  badges: userData.badges || [],
+                  cpPartnerId: userData.cpPartnerId,
+                  cpPartnerName: userData.cpPartnerName,
+                  cpPartnerAvatar: userData.cpPartnerAvatar,
+                  equippedCpFrame: userData.equippedCpFrame,
+                  cpBackground: userData.cpBackground
                 });
               }} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <User size={20} />
@@ -885,7 +930,8 @@ export default function LiveRoom({
               <h3 className="text-center font-bold mb-6 text-gray-200">أدوات الغرفة</h3>
               <div className="grid grid-cols-4 gap-y-6 gap-x-4">
                 {[
-                  { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
+                  { icon: <Gamepad2 />, label: 'الألعاب', color: 'text-purple-400', action: () => { setShowAdminTools(false); setShowGameCenter(true); } },
+                { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
                   { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
                   { icon: <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
@@ -1227,6 +1273,11 @@ export default function LiveRoom({
           </div>
         )}
 
+        {/* Game Center Modal */}
+        {showGameCenter && (
+          <GameCenterModal onClose={() => setShowGameCenter(false)} />
+        )}
+
         {/* User Profile Modal */}
         {selectedProfile && (
           <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProfile(null)}>
@@ -1257,6 +1308,44 @@ export default function LiveRoom({
                   <p className="text-blue-400 font-bold flex items-center gap-1 justify-center"><Diamond size={14}/> Lv.{calculateLevel(selectedProfile.totalSpent || 0)}</p>
                 </div>
               </div>
+
+              {selectedProfile.cpPartnerId && (
+                <div className="border border-pink-500/30 rounded-2xl p-4 mb-6 relative overflow-hidden flex items-center justify-between">
+                  {selectedProfile.cpBackground ? (
+                    <img src={selectedProfile.cpBackground} className="absolute inset-0 w-full h-full object-cover" style={{ imageRendering: 'high-quality' }} alt="CP Background" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gray-800/50"></div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40"></div>
+                  
+                  <div className="relative z-10 flex items-center gap-4 w-full justify-center">
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14 flex items-center justify-center">
+                        <img src={selectedProfile.avatar} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="User" referrerPolicy="no-referrer" />
+                        {selectedProfile.equippedCpFrame && (
+                          <img src={selectedProfile.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                        )}
+                      </div>
+                      <span className="text-[9px] font-bold text-white mt-3 truncate max-w-[60px] bg-black/50 px-2 py-0.5 rounded-full">{selectedProfile.name}</span>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center animate-pulse px-2">
+                      <Heart className="text-pink-500 fill-pink-500 drop-shadow-md" size={24} />
+                      <span className="text-[8px] font-bold text-pink-400 mt-1 bg-black/50 px-2 py-0.5 rounded-full">CP</span>
+                    </div>
+
+                    <div className="flex flex-col items-center">
+                      <div className="relative w-14 h-14 flex items-center justify-center">
+                        <img src={selectedProfile.cpPartnerAvatar} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="Partner" referrerPolicy="no-referrer" />
+                        {selectedProfile.equippedCpFrame && (
+                          <img src={selectedProfile.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                        )}
+                      </div>
+                      <span className="text-[9px] font-bold text-white mt-3 truncate max-w-[60px] bg-black/50 px-2 py-0.5 rounded-full">{selectedProfile.cpPartnerName}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="bg-gray-800/50 border border-gray-700 rounded-2xl p-4 mb-6 min-h-[80px]">
                 <p className="text-[10px] text-gray-400 mb-3">الأوسمة</p>
@@ -1288,6 +1377,54 @@ export default function LiveRoom({
                   متابعة
                 </button>
               </div>
+
+              {/* Room Admin Controls */}
+              {room.hostId === user?.uid && selectedProfile.uid !== user?.uid && (
+                <div className="mt-4 flex gap-3 border-t border-gray-800 pt-4">
+                  <button 
+                    onClick={async () => {
+                      if (!confirm('هل أنت متأكد من طرد هذا المستخدم من الغرفة؟')) return;
+                      try {
+                        const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
+                        const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
+                        await updateDoc(doc(db, 'rooms', roomId), {
+                          audience: newAudience,
+                          speakers: newSpeakers
+                        });
+                        setSelectedProfile(null);
+                      } catch (error) {
+                        console.error('Error kicking user:', error);
+                      }
+                    }}
+                    className="flex-1 bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 transition py-2.5 rounded-xl font-bold border border-orange-500/30 flex items-center justify-center gap-2"
+                  >
+                    <User size={16} />
+                    طرد
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      if (!confirm('هل أنت متأكد من حظر هذا المستخدم من الغرفة نهائياً؟')) return;
+                      try {
+                        const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
+                        const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
+                        const newBanned = [...(room.bannedUsers || []), selectedProfile.uid];
+                        await updateDoc(doc(db, 'rooms', roomId), {
+                          audience: newAudience,
+                          speakers: newSpeakers,
+                          bannedUsers: newBanned
+                        });
+                        setSelectedProfile(null);
+                      } catch (error) {
+                        console.error('Error banning user:', error);
+                      }
+                    }}
+                    className="flex-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 transition py-2.5 rounded-xl font-bold border border-red-500/30 flex items-center justify-center gap-2"
+                  >
+                    <ShieldBan size={16} />
+                    حظر
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

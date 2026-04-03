@@ -106,7 +106,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Update in Firestore
       try {
         const userRef = doc(db, 'users', auth.currentUser.uid);
+        const userDoc = await getDoc(userRef);
         await setDoc(userRef, { displayName, photoURL }, { merge: true });
+
+        // If user has a CP partner, update the partner's document with the new name/avatar
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.cpPartnerId) {
+            const partnerRef = doc(db, 'users', userData.cpPartnerId);
+            await setDoc(partnerRef, {
+              cpPartnerName: displayName,
+              cpPartnerAvatar: photoURL
+            }, { merge: true });
+          }
+        }
       } catch (error) {
         console.error("Error updating user in Firestore:", error);
       }

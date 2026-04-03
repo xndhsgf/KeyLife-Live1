@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { Save, Image as ImageIcon } from 'lucide-react';
 
 export default function CPTab() {
@@ -10,6 +10,7 @@ export default function CPTab() {
     backgroundUrl: ''
   });
   const [loading, setLoading] = useState(false);
+  const [updateExisting, setUpdateExisting] = useState(true);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -26,6 +27,31 @@ export default function CPTab() {
     setLoading(true);
     try {
       await setDoc(doc(db, 'settings', 'cp_config'), config);
+      
+      if (updateExisting) {
+        // Update all users who have a CP partner
+        const usersRef = collection(db, 'users');
+        const querySnapshot = await getDocs(usersRef);
+        
+        const batch = writeBatch(db);
+        let count = 0;
+        
+        querySnapshot.forEach((userDoc) => {
+          const data = userDoc.data();
+          if (data.cpPartnerId) {
+            batch.update(userDoc.ref, {
+              equippedCpFrame: config.frameUrl,
+              cpBackground: config.backgroundUrl
+            });
+            count++;
+          }
+        });
+        
+        if (count > 0) {
+          await batch.commit();
+        }
+      }
+
       alert('تم حفظ إعدادات الـ CP بنجاح');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -84,6 +110,19 @@ export default function CPTab() {
           {config.backgroundUrl && (
             <img src={config.backgroundUrl} alt="Background Preview" className="mt-2 w-full h-32 object-cover border rounded-lg" />
           )}
+        </div>
+
+        <div className="flex items-center gap-2 mt-4">
+          <input
+            type="checkbox"
+            id="updateExisting"
+            checked={updateExisting}
+            onChange={e => setUpdateExisting(e.target.checked)}
+            className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+          />
+          <label htmlFor="updateExisting" className="text-sm text-gray-700">
+            تطبيق الإطار والخلفية الجديدة على جميع الكابلز الحاليين
+          </label>
         </div>
 
         <button

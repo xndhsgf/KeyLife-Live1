@@ -3,6 +3,7 @@ import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X } from 'lucide-react'
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 
 export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => void }) {
   const { user } = useAuth();
@@ -15,6 +16,17 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
   const [topSupporters, setTopSupporters] = useState<any[]>([]);
   const [targetCpId, setTargetCpId] = useState('');
   const [cpLoading, setCpLoading] = useState(false);
+
+  useEffect(() => {
+    const handleBack = () => {
+      if (showRankingModal) { setShowRankingModal(false); return true; }
+      if (showCPModal) { setShowCPModal(false); return true; }
+      return false;
+    };
+
+    registerBackHandler(handleBack);
+    return () => unregisterBackHandler(handleBack);
+  }, [showRankingModal, showCPModal]);
 
   const handleCPRequest = async () => {
     if (!user || !targetCpId) return;
@@ -53,10 +65,26 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
         return;
       }
 
-      // Deduct diamonds
-      await updateDoc(userRef, { diamonds: userData!.diamonds - config.price });
+      // Deduct diamonds and set CP for sender
+      await updateDoc(userRef, { 
+        diamonds: userData!.diamonds - config.price,
+        cpPartnerId: targetUserDoc.id,
+        cpPartnerName: targetUserDoc.data().displayName || 'مستخدم',
+        cpPartnerAvatar: targetUserDoc.data().photoURL || '',
+        equippedCpFrame: config.frameUrl,
+        cpBackground: config.backgroundUrl
+      });
 
-      // Create CP Request
+      // Set CP for receiver
+      await updateDoc(targetUserDoc.ref, {
+        cpPartnerId: user.uid,
+        cpPartnerName: userData?.displayName || 'مستخدم',
+        cpPartnerAvatar: userData?.photoURL || '',
+        equippedCpFrame: config.frameUrl,
+        cpBackground: config.backgroundUrl
+      });
+
+      // Create CP Request record (optional, for history)
       await setDoc(doc(collection(db, 'cp_requests')), {
         senderId: user.uid,
         senderName: userData?.displayName || 'مستخدم',
@@ -64,13 +92,13 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
         receiverId: targetUserDoc.id,
         receiverName: targetUserDoc.data().displayName || 'مستخدم',
         receiverAvatar: targetUserDoc.data().photoURL || '',
-        status: 'pending',
+        status: 'accepted', // Auto-accepted as requested
         createdAt: new Date().toISOString(),
         frameUrl: config.frameUrl,
         backgroundUrl: config.backgroundUrl
       });
 
-      alert('تم إرسال طلب الـ CP بنجاح!');
+      alert('تم إنشاء الـ CP بنجاح! تم تطبيق الإطار لكلا الحسابين.');
       setShowCPModal(false);
       setTargetCpId('');
     } catch (error: any) {

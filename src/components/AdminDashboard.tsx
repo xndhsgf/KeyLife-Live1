@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -9,6 +9,7 @@ import UsersTab from './admin/UsersTab';
 import RoomBackgroundsTab from './admin/RoomBackgroundsTab';
 import AdminResetTab from './admin/AdminResetTab';
 import CPTab from './admin/CPTab';
+import GamesTab from './admin/GamesTab';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('gifts');
@@ -60,11 +61,15 @@ export default function AdminDashboard() {
       <div className="flex flex-wrap bg-white border-b border-gray-200">
         <TabButton active={activeTab === 'gifts'} onClick={() => setActiveTab('gifts')} icon={<Plus size={18} />} label="إضافة هدية" />
         <TabButton active={activeTab === 'games'} onClick={() => setActiveTab('games')} icon={<Gamepad2 size={18} />} label="الألعاب (هدايا الحظ)" />
+        <TabButton active={activeTab === 'gameCenter'} onClick={() => setActiveTab('gameCenter')} icon={<Gamepad2 size={18} />} label="مركز الألعاب" />
         <TabButton active={activeTab === 'store'} onClick={() => setActiveTab('store')} icon={<ShoppingBag size={18} />} label="المتجر (إطارات)" />
         <TabButton active={activeTab === 'icons'} onClick={() => setActiveTab('icons')} icon={<ImageIcon size={18} />} label="بنك الأيقونات" />
         <TabButton active={activeTab === 'giftBox'} onClick={() => setActiveTab('giftBox')} icon={<Gift size={18} />} label="صندوق الهدايا" />
         <TabButton active={activeTab === 'badges'} onClick={() => setActiveTab('badges')} icon={<Star size={18} />} label="الأوسمة" />
         <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
+        <TabButton active={activeTab === 'agencies'} onClick={() => setActiveTab('agencies')} icon={<Briefcase size={18} />} label="وكالات الشحن" />
+        <TabButton active={activeTab === 'vip'} onClick={() => setActiveTab('vip')} icon={<Crown size={18} />} label="نظام VIP" />
+        <TabButton active={activeTab === 'gift_categories'} onClick={() => setActiveTab('gift_categories')} icon={<List size={18} />} label="أقسام الهدايا" />
         <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
         <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
         <TabButton active={activeTab === 'cp'} onClick={() => setActiveTab('cp')} icon={<Users size={18} />} label="إعدادات الـ CP" />
@@ -77,12 +82,16 @@ export default function AdminDashboard() {
 
       <div className="flex-1 overflow-y-auto p-4">
         {activeTab === 'gifts' && <AddGiftTab />}
-        {activeTab === 'games' && <GamesTab />}
+        {activeTab === 'games' && <GamesTabOld />}
+        {activeTab === 'gameCenter' && <GamesTab />}
         {activeTab === 'store' && <StoreTab />}
         {activeTab === 'icons' && <IconsBankTab />}
         {activeTab === 'giftBox' && <GiftBoxTab />}
         {activeTab === 'badges' && <BadgesTab />}
         {activeTab === 'diamonds' && <DiamondsTab />}
+        {activeTab === 'agencies' && <AgenciesTab />}
+        {activeTab === 'vip' && <VIPTab />}
+        {activeTab === 'gift_categories' && <GiftCategoriesTab />}
         {activeTab === 'mics' && <MicsTab />}
         {activeTab === 'banners' && <BannersTab />}
         {activeTab === 'cp' && <CPTab />}
@@ -885,7 +894,7 @@ function AddGiftTab() {
   );
 }
 
-function GamesTab() {
+function GamesTabOld() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -1938,6 +1947,327 @@ function BackgroundsTab() {
             </div>
           ))}
           {backgrounds.length === 0 && <p className="text-gray-500 text-sm col-span-full text-center py-4">لا توجد خلفيات مضافة حالياً</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgenciesTab() {
+  const [agencies, setAgencies] = useState<any[]>([]);
+  const [userId, setUserId] = useState('');
+  const [initialBalance, setInitialBalance] = useState('10000');
+  const [bonusPercentage, setBonusPercentage] = useState('0');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'agencies'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setAgencies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleCreateAgency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId || !initialBalance) return alert('الرجاء إدخال ID المستخدم والرصيد');
+    setIsSubmitting(true);
+    try {
+      // Find user by numericId or uid
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('numericId', '==', parseInt(userId)));
+      const snapshot = await getDocs(q);
+      
+      let targetUserId = userId;
+      let targetUserName = 'مستخدم';
+      
+      if (!snapshot.empty) {
+        targetUserId = snapshot.docs[0].id;
+        targetUserName = snapshot.docs[0].data().displayName || 'مستخدم';
+      } else {
+        // Try direct ID
+        const docRef = doc(db, 'users', userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          targetUserName = docSnap.data().displayName || 'مستخدم';
+        } else {
+          throw new Error('لم يتم العثور على المستخدم');
+        }
+      }
+
+      await addDoc(collection(db, 'agencies'), {
+        userId: targetUserId,
+        userName: targetUserName,
+        numericId: parseInt(userId) || 0,
+        balance: parseInt(initialBalance),
+        bonusPercentage: parseInt(bonusPercentage),
+        createdAt: Date.now()
+      });
+
+      // Update user to be an agent
+      await updateDoc(doc(db, 'users', targetUserId), {
+        isAgent: true,
+        agentBalance: parseInt(initialBalance),
+        agentBonus: parseInt(bonusPercentage)
+      });
+
+      setUserId('');
+      setInitialBalance('10000');
+      setBonusPercentage('0');
+      alert('تم إنشاء وكالة الشحن بنجاح!');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAgency = async (agencyId: string, targetUserId: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذه الوكالة؟')) return;
+    try {
+      await deleteDoc(doc(db, 'agencies', agencyId));
+      await updateDoc(doc(db, 'users', targetUserId), {
+        isAgent: false
+      });
+    } catch (error: any) {
+      alert('خطأ في الحذف: ' + error.message);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">إنشاء وكالة شحن جديدة</h2>
+        <form onSubmit={handleCreateAgency} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">ID المستخدم</label>
+            <input type="text" value={userId} onChange={e => setUserId(e.target.value)} className="w-full border rounded-lg p-2" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">الرصيد الافتتاحي (ألماس)</label>
+            <input type="number" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} className="w-full border rounded-lg p-2" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">نسبة البونص الإضافي (%)</label>
+            <input type="number" value={bonusPercentage} onChange={e => setBonusPercentage(e.target.value)} className="w-full border rounded-lg p-2" required />
+          </div>
+          <div className="flex items-end">
+            <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50">
+              {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء وكالة'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">الوكالات الحالية</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-right">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="p-3 rounded-tr-lg">المستخدم</th>
+                <th className="p-3">ID</th>
+                <th className="p-3">الرصيد الحالي</th>
+                <th className="p-3">البونص</th>
+                <th className="p-3 rounded-tl-lg">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agencies.map(agency => (
+                <tr key={agency.id} className="border-b border-gray-50">
+                  <td className="p-3 font-bold">{agency.userName}</td>
+                  <td className="p-3 font-mono text-gray-500">{agency.numericId || agency.userId.substring(0,8)}</td>
+                  <td className="p-3 text-indigo-600 font-bold">{agency.balance?.toLocaleString()} 💎</td>
+                  <td className="p-3 text-green-600 font-bold">+{agency.bonusPercentage || 0}%</td>
+                  <td className="p-3">
+                    <button onClick={() => handleDeleteAgency(agency.id, agency.userId)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition">
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {agencies.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-gray-400">لا توجد وكالات شحن حالياً</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VIPTab() {
+  const [levels, setLevels] = useState<any[]>([]);
+  const [levelNumber, setLevelNumber] = useState('');
+  const [name, setName] = useState('');
+  const [backgroundUrl, setBackgroundUrl] = useState('');
+  const [frameUrl, setFrameUrl] = useState('');
+  const [entranceEffectUrl, setEntranceEffectUrl] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'vip_levels'), orderBy('levelNumber', 'asc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setLevels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAddVIP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!levelNumber || !name) return;
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'vip_levels'), {
+        levelNumber: parseInt(levelNumber),
+        name,
+        backgroundUrl,
+        frameUrl,
+        entranceEffectUrl,
+        createdAt: Date.now()
+      });
+      setLevelNumber('');
+      setName('');
+      setBackgroundUrl('');
+      setFrameUrl('');
+      setEntranceEffectUrl('');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('حذف هذا المستوى؟')) return;
+    await deleteDoc(doc(db, 'vip_levels', id));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">إضافة مستوى VIP جديد</h2>
+        <form onSubmit={handleAddVIP} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">رقم المستوى (مثال: 1)</label>
+            <input type="number" value={levelNumber} onChange={e => setLevelNumber(e.target.value)} className="w-full border rounded-lg p-2" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">اسم المستوى (مثال: VIP 1)</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full border rounded-lg p-2" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط خلفية الغرفة (اختياري)</label>
+            <input type="url" value={backgroundUrl} onChange={e => setBackgroundUrl(e.target.value)} className="w-full border rounded-lg p-2" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط إطار الصورة (اختياري)</label>
+            <input type="url" value={frameUrl} onChange={e => setFrameUrl(e.target.value)} className="w-full border rounded-lg p-2" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط تأثير الدخول (اختياري)</label>
+            <input type="url" value={entranceEffectUrl} onChange={e => setEntranceEffectUrl(e.target.value)} className="w-full border rounded-lg p-2" />
+          </div>
+          <div className="md:col-span-2">
+            <button type="submit" disabled={isSubmitting} className="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg hover:bg-yellow-600 transition disabled:opacity-50">
+              {isSubmitting ? 'جاري الإضافة...' : 'إضافة مستوى VIP'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {levels.map(level => (
+          <div key={level.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-200 relative overflow-hidden">
+            <div className="absolute top-2 left-2">
+              <button onClick={() => handleDelete(level.id)} className="text-red-500 hover:bg-red-50 p-1 rounded transition">
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                V{level.levelNumber}
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">{level.name}</h3>
+              </div>
+            </div>
+            <div className="space-y-2 text-xs text-gray-500">
+              <p className="flex justify-between"><span>خلفية:</span> <span>{level.backgroundUrl ? '✅' : '❌'}</span></p>
+              <p className="flex justify-between"><span>إطار:</span> <span>{level.frameUrl ? '✅' : '❌'}</span></p>
+              <p className="flex justify-between"><span>تأثير دخول:</span> <span>{level.entranceEffectUrl ? '✅' : '❌'}</span></p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GiftCategoriesTab() {
+  const [categories, setCategories] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const q = query(collection(db, 'gift_categories'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const handleAddCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name) return;
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, 'gift_categories'), {
+        name,
+        createdAt: Date.now()
+      });
+      setName('');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('حذف هذا القسم؟')) return;
+    await deleteDoc(doc(db, 'gift_categories', id));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">إضافة قسم هدايا جديد</h2>
+        <form onSubmit={handleAddCategory} className="flex gap-4">
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="اسم القسم (مثال: هدايا حصرية)" className="flex-1 border rounded-lg p-3" required />
+          <button type="submit" disabled={isSubmitting} className="bg-pink-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-pink-600 transition disabled:opacity-50 whitespace-nowrap">
+            {isSubmitting ? 'جاري الإضافة...' : 'إضافة القسم'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">الأقسام الحالية</h2>
+        <div className="flex flex-wrap gap-3">
+          {categories.map(cat => (
+            <div key={cat.id} className="bg-pink-50 border border-pink-200 text-pink-700 px-4 py-2 rounded-full flex items-center gap-2 font-bold">
+              {cat.name}
+              <button onClick={() => handleDelete(cat.id)} className="text-pink-400 hover:text-red-500 transition ml-2">
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+          {categories.length === 0 && (
+            <p className="text-gray-400 w-full text-center py-4">لا توجد أقسام حالياً. سيتم استخدام الأقسام الافتراضية.</p>
+          )}
         </div>
       </div>
     </div>
