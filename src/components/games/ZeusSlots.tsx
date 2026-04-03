@@ -56,27 +56,32 @@ export default function ZeusSlots() {
           
           const won = bet * 5;
           setWinAmount(won);
-          updateDoc(userRef, { diamonds: diamonds - bet + won });
+          const latestUserDoc = getDoc(userRef);
+          latestUserDoc.then(d => {
+            const current = d.data()?.diamonds || 0;
+            updateDoc(userRef, { diamonds: current + won });
+          });
         }
       }
     }, 100);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-white bg-[url('https://picsum.photos/seed/zeus/800/600')] bg-cover bg-center">
+    <div className="flex flex-col items-center justify-center h-full p-2 sm:p-4 text-white bg-gray-950 relative overflow-hidden">
+      <div className="bg-[url('https://picsum.photos/seed/zeus/800/600')] bg-cover bg-center absolute inset-0 opacity-20"></div>
       <div className="bg-black/60 absolute inset-0"></div>
       
       <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
-        <div className="text-5xl mb-8 font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] tracking-wider">
+        <div className="text-3xl sm:text-5xl mb-4 sm:mb-8 font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] tracking-wider">
           ZEUS SLOTS
         </div>
 
-        <div className="bg-gradient-to-b from-yellow-900/90 to-yellow-800/90 p-3 rounded-2xl border-4 border-yellow-500 mb-8 w-full shadow-[0_0_40px_rgba(250,204,21,0.3)]">
-          <div className="grid grid-rows-4 gap-2">
+        <div className="bg-gradient-to-b from-yellow-900/90 to-yellow-800/90 p-1.5 sm:p-3 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-yellow-500 mb-6 sm:mb-8 w-full shadow-[0_0_40px_rgba(250,204,21,0.3)]">
+          <div className="grid grid-rows-4 gap-1 sm:gap-2">
             {grid.map((row, i) => (
-              <div key={i} className="grid grid-cols-5 gap-2">
+              <div key={i} className="grid grid-cols-5 gap-1 sm:gap-2">
                 {row.map((symbol, j) => (
-                  <div key={j} className="bg-gradient-to-b from-black/80 to-black/60 rounded-xl aspect-square flex items-center justify-center text-4xl border-2 border-yellow-500/30 shadow-inner">
+                  <div key={j} className="bg-gradient-to-b from-black/80 to-black/60 rounded-lg sm:rounded-xl aspect-square flex items-center justify-center text-xl sm:text-4xl border border-yellow-500/30 shadow-inner">
                     <span className={spinning ? 'animate-pulse blur-[1px]' : ''}>{symbol}</span>
                   </div>
                 ))}
@@ -85,12 +90,12 @@ export default function ZeusSlots() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between w-full bg-black/80 p-6 rounded-3xl border-2 border-yellow-500/50 shadow-2xl">
-          <div className="flex flex-col items-center bg-gray-900 p-3 rounded-xl border border-gray-700">
-            <span className="text-gray-400 text-xs mb-1 uppercase tracking-wider">الرهان</span>
+        <div className="flex flex-col sm:flex-row items-center justify-between w-full bg-black/80 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border-2 border-yellow-500/50 shadow-2xl gap-4 sm:gap-0">
+          <div className="flex flex-col items-center bg-gray-900 p-2 sm:p-3 rounded-xl border border-gray-700 w-full sm:w-auto">
+            <span className="text-gray-400 text-[10px] sm:text-xs mb-1 uppercase tracking-wider">الرهان</span>
             <div className="flex items-center gap-3">
               <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-full font-bold hover:bg-gray-600">-</button>
-              <span className="font-black text-2xl text-white w-16 text-center">{bet}</span>
+              <span className="font-black text-xl sm:text-2xl text-white w-12 sm:w-16 text-center">{bet}</span>
               <button onClick={() => setBet(bet + 10)} disabled={spinning} className="w-8 h-8 flex items-center justify-center bg-gray-700 rounded-full font-bold hover:bg-gray-600">+</button>
             </div>
           </div>
@@ -98,14 +103,14 @@ export default function ZeusSlots() {
           <button 
             onClick={handleSpin}
             disabled={spinning}
-            className="w-28 h-28 rounded-full bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-700 border-4 border-yellow-200 text-black font-black text-2xl shadow-[0_0_40px_rgba(250,204,21,0.6)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center"
+            className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-700 border-4 border-yellow-200 text-black font-black text-xl sm:text-2xl shadow-[0_0_40px_rgba(250,204,21,0.6)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center"
           >
             SPIN
           </button>
 
-          <div className="flex flex-col items-center bg-gray-900 p-3 rounded-xl border border-gray-700 min-w-[120px]">
-            <span className="text-gray-400 text-xs mb-1 uppercase tracking-wider">الفوز</span>
-            <span className={`font-black text-2xl ${winAmount > 0 ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]' : 'text-yellow-400'}`}>
+          <div className="flex flex-col items-center bg-gray-900 p-2 sm:p-3 rounded-xl border border-gray-700 min-w-[100px] sm:min-w-[120px] w-full sm:w-auto">
+            <span className="text-gray-400 text-[10px] sm:text-xs mb-1 uppercase tracking-wider">الفوز</span>
+            <span className={`font-black text-xl sm:text-2xl ${winAmount > 0 ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]' : 'text-yellow-400'}`}>
               {winAmount}
             </span>
           </div>

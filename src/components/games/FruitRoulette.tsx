@@ -57,7 +57,6 @@ export default function FruitRoulette() {
     const itemIndex = ITEMS.indexOf(winningItem);
     const segmentAngle = 360 / ITEMS.length;
     // Add 5 full rotations + the angle to the winning item
-    // We subtract the angle because the wheel rotates clockwise, so the item at top needs to come from counter-clockwise
     const targetRotation = rotation + (360 * 5) - (itemIndex * segmentAngle);
     
     setRotation(targetRotation);
@@ -68,23 +67,26 @@ export default function FruitRoulette() {
 
       if (isWin) {
         const winAmount = bet * winningItem.multiplier;
-        await updateDoc(userRef, { diamonds: diamonds - bet + winAmount });
+        const latestUserDoc = await getDoc(userRef);
+        const currentDiamonds = latestUserDoc.data()?.diamonds || 0;
+        await updateDoc(userRef, { diamonds: currentDiamonds + winAmount });
       }
     }, 3000);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-white bg-[url('https://picsum.photos/seed/casino/800/600')] bg-cover bg-center">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+    <div className="flex flex-col items-center justify-center h-full p-4 text-white bg-gray-950 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/casino/800/600')] bg-cover bg-center opacity-20"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80"></div>
       
-      <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
-        <div className="relative w-64 h-64 mb-12">
+      <div className="relative z-10 flex flex-col items-center w-full max-w-md">
+        <div className="relative w-48 h-48 sm:w-64 sm:h-64 mb-8 sm:mb-12">
           {/* Pointer */}
           <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-6 h-8 bg-yellow-400 z-20 shadow-lg" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }}></div>
           
           {/* Wheel */}
           <div 
-            className="w-full h-full rounded-full border-8 border-yellow-500 relative transition-transform duration-[3000ms] ease-out bg-indigo-900 shadow-[0_0_30px_rgba(234,179,8,0.3)]"
+            className="w-full h-full rounded-full border-4 sm:border-8 border-yellow-500 relative transition-transform duration-[3000ms] ease-out bg-indigo-900 shadow-[0_0_30px_rgba(234,179,8,0.3)]"
             style={{ transform: `rotate(${rotation}deg)` }}
           >
             {ITEMS.map((item, idx) => {
@@ -92,7 +94,7 @@ export default function FruitRoulette() {
               return (
                 <div 
                   key={item.id}
-                  className="absolute top-0 left-1/2 -translate-x-1/2 origin-bottom h-1/2 flex items-start justify-center pt-4 text-4xl"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 origin-bottom h-1/2 flex items-start justify-center pt-2 sm:pt-4 text-2xl sm:text-4xl"
                   style={{ transform: `rotate(${angle}deg)` }}
                 >
                   <span style={{ transform: `rotate(${-angle}deg)` }}>{item.icon}</span>
@@ -100,41 +102,41 @@ export default function FruitRoulette() {
               );
             })}
             {/* Center dot */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-yellow-500 rounded-full border-4 border-yellow-700 z-10"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 sm:w-12 sm:h-12 bg-yellow-500 rounded-full border-2 sm:border-4 border-yellow-700 z-10"></div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-8 w-full max-w-md">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8 w-full">
           {ITEMS.map(item => (
             <button 
               key={item.id}
               onClick={() => setSelectedItem(item.id)}
               disabled={spinning}
-              className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${selectedItem === item.id ? 'border-yellow-400 bg-yellow-400/20 scale-105 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'border-gray-600 bg-gray-800/80 hover:bg-gray-700'}`}
+              className={`p-2 sm:p-4 rounded-xl sm:rounded-2xl border-2 flex flex-col items-center gap-1 sm:gap-2 transition-all ${selectedItem === item.id ? 'border-yellow-400 bg-yellow-400/20 scale-105 shadow-[0_0_15px_rgba(250,204,21,0.5)]' : 'border-gray-600 bg-gray-800/80 hover:bg-gray-700'}`}
             >
-              <span className="text-3xl">{item.icon}</span>
-              <span className="text-sm font-bold text-yellow-400">x{item.multiplier}</span>
+              <span className="text-xl sm:text-3xl">{item.icon}</span>
+              <span className="text-[10px] sm:text-sm font-bold text-yellow-400">x{item.multiplier}</span>
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-4 mb-8 bg-black/50 p-4 rounded-2xl border border-white/10">
-          <span className="text-gray-400">الرهان:</span>
-          <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="px-4 py-2 bg-gray-700 rounded-lg font-bold hover:bg-gray-600">-</button>
-          <span className="text-2xl font-bold w-24 text-center text-yellow-400">{bet} 💎</span>
-          <button onClick={() => setBet(bet + 10)} disabled={spinning} className="px-4 py-2 bg-gray-700 rounded-lg font-bold hover:bg-gray-600">+</button>
+        <div className="flex items-center gap-2 sm:gap-4 mb-6 sm:mb-8 bg-black/50 p-2 sm:p-4 rounded-xl sm:rounded-2xl border border-white/10 w-full justify-center">
+          <span className="text-gray-400 text-xs sm:text-sm">الرهان:</span>
+          <button onClick={() => setBet(Math.max(10, bet - 10))} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">-</button>
+          <span className="text-lg sm:text-2xl font-bold w-16 sm:w-24 text-center text-yellow-400">{bet} 💎</span>
+          <button onClick={() => setBet(bet + 10)} disabled={spinning} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-gray-700 rounded-lg font-bold hover:bg-gray-600">+</button>
         </div>
 
         <button 
           onClick={handleSpin} 
           disabled={spinning}
-          className="w-full max-w-md py-4 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl font-black text-2xl shadow-[0_0_30px_rgba(249,115,22,0.5)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100 text-black"
+          className="w-full py-3 sm:py-4 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl sm:rounded-2xl font-black text-xl sm:text-2xl shadow-[0_0_30px_rgba(249,115,22,0.5)] hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:hover:scale-100 text-black"
         >
           {spinning ? 'جاري الدوران...' : 'العب الآن'}
         </button>
 
         {result && !spinning && (
-          <div className="mt-6 text-2xl font-black animate-bounce">
+          <div className="mt-4 sm:mt-6 text-xl sm:text-2xl font-black animate-bounce text-center">
             {result.id === selectedItem ? (
               <span className="text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]">لقد فزت بـ {bet * result.multiplier} 💎!</span>
             ) : (

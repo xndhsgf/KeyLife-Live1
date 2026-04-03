@@ -181,7 +181,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                 rel="noreferrer"
                 className={`absolute inset-0 transition-opacity duration-500 ${idx === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               >
-                <img src={banner.imageUrl} alt="Banner" className="w-full h-full object-cover" />
+                <img src={banner.imageUrl || undefined} alt="Banner" className="w-full h-full object-cover" />
               </a>
             ))}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-20">
@@ -241,7 +241,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                   className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative"
                 >
                   <div className="h-32 bg-gray-200 relative">
-                    <img src={room.ownerAvatar} alt={room.ownerName} className="w-full h-full object-cover" />
+                    <img src={room.ownerAvatar || undefined} alt={room.ownerName} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                     <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded-full text-white text-[10px]">
                       <Radio size={10} className="text-green-400 animate-pulse" />

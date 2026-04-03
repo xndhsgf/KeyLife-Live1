@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { calculateLevel, getProgressToNextLevel } from '../lib/levels';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
@@ -12,6 +12,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhotoURL, setEditPhotoURL] = useState('');
+  const [editIdIcon, setEditIdIcon] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userData, setUserData] = useState<any>(null);
@@ -40,6 +41,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
         if (docSnap.exists()) {
           const data = docSnap.data();
           setUserData(data);
+          setEditIdIcon(data.idIcon || '');
           if (data.role === 'admin') {
             setIsAdmin(true);
           }
@@ -65,6 +67,11 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
     setIsSaving(true);
     try {
       await updateUserProfile(editName, editPhotoURL);
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          idIcon: editIdIcon || null
+        });
+      }
       setIsEditing(false);
     } catch (error: any) {
       console.error("Failed to update profile", error);
@@ -152,14 +159,22 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
                   className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-purple-500 outline-none"
                   dir="ltr"
                 />
+                <input 
+                  type="text" 
+                  value={editIdIcon} 
+                  onChange={(e) => setEditIdIcon(e.target.value)} 
+                  placeholder="رابط أيقونة الـ ID"
+                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                  dir="ltr"
+                />
               </div>
             ) : (
               <>
                 <h1 className="text-xl font-bold text-gray-800">{user?.displayName || 'مستخدم جديد'}</h1>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="relative h-6 px-3 flex items-center justify-center overflow-hidden rounded-md border border-gray-200">
-                    {appIcons.idIcon && (
-                      <img src={appIcons.idIcon} className="absolute inset-0 w-full h-full object-cover opacity-80" alt="ID Background" />
+                    {(userData?.idIcon || appIcons.idIcon) && (
+                      <img src={userData?.idIcon || appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" alt="ID Background" />
                     )}
                     <span className="relative z-10 text-xs text-gray-700 font-mono font-bold">ID: {userData?.numericId || '123456789'}</span>
                   </div>
@@ -201,7 +216,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
           <div className="mt-6">
             <div className="relative rounded-2xl overflow-hidden p-4 shadow-sm border border-pink-100 flex items-center justify-between bg-white">
               {userData.cpBackground && (
-                <img src={userData.cpBackground} className="absolute inset-0 w-full h-full object-cover" style={{ imageRendering: 'high-quality' }} alt="CP Background" />
+                <img src={userData.cpBackground || undefined} className="absolute inset-0 w-full h-full object-cover" style={{ imageRendering: 'high-quality' }} alt="CP Background" />
               )}
               <div className="absolute inset-0 bg-black/40"></div>
               
@@ -211,7 +226,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
                   <div className="relative w-16 h-16 flex items-center justify-center">
                     <img src={user?.photoURL || "https://picsum.photos/seed/myprofile/100/100"} className="w-full h-full rounded-full object-cover border-2 border-white/50 shadow-sm" alt="Me" referrerPolicy="no-referrer" />
                     {userData.equippedCpFrame && (
-                      <img src={userData.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                      <img src={userData.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
                     )}
                   </div>
                   <span className="text-[10px] font-bold text-white mt-4 bg-black/50 px-2 py-0.5 rounded-full shadow-sm truncate max-w-[80px] text-center">{user?.displayName}</span>
@@ -228,12 +243,42 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
                   <div className="relative w-16 h-16 flex items-center justify-center">
                     <img src={userData.cpPartnerAvatar || "https://picsum.photos/seed/partner/100/100"} className="w-full h-full rounded-full object-cover border-2 border-white/50 shadow-sm" alt="Partner" referrerPolicy="no-referrer" />
                     {userData.equippedCpFrame && (
-                      <img src={userData.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                      <img src={userData.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
                     )}
                   </div>
                   <span className="text-[10px] font-bold text-white mt-4 bg-black/50 px-2 py-0.5 rounded-full shadow-sm truncate max-w-[80px] text-center">{userData.cpPartnerName}</span>
                 </div>
               </div>
+              
+              <button 
+                onClick={async () => {
+                  if (!confirm('هل أنت متأكد من إلغاء علاقة الـ CP؟')) return;
+                  try {
+                    const partnerId = userData.cpPartnerId;
+                    await updateDoc(doc(db, 'users', user!.uid), {
+                      cpPartnerId: null,
+                      cpPartnerName: null,
+                      cpPartnerAvatar: null,
+                      equippedCpFrame: null,
+                      cpBackground: null
+                    });
+                    await updateDoc(doc(db, 'users', partnerId), {
+                      cpPartnerId: null,
+                      cpPartnerName: null,
+                      cpPartnerAvatar: null,
+                      equippedCpFrame: null,
+                      cpBackground: null
+                    });
+                    alert('تم إلغاء علاقة الـ CP بنجاح');
+                  } catch (error) {
+                    console.error('Error cancelling CP:', error);
+                  }
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-red-500/20 text-red-500 rounded-full hover:bg-red-500/40 transition z-20"
+                title="إلغاء CP"
+              >
+                <X size={14} />
+              </button>
             </div>
           </div>
         )}
@@ -306,26 +351,48 @@ function AgencyPanelModal({ onClose, agentBalance, agentBonus }: { onClose: () =
 
     setIsSubmitting(true);
     try {
-      // Find target user
+      // Find target user by numericId (string or number) or uid
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('numericId', '==', parseInt(targetId)));
-      const snapshot = await getDocs(q);
-      
       let targetUserId = targetId;
       let currentDiamonds = 0;
-      
-      if (!snapshot.empty) {
-        targetUserId = snapshot.docs[0].id;
-        currentDiamonds = snapshot.docs[0].data().diamonds || 0;
-      } else {
-        // Try direct ID
+      let currentTotalSpent = 0;
+      let found = false;
+
+      // 1. Try numericId as string
+      const q1 = query(usersRef, where('numericId', '==', targetId));
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) {
+        targetUserId = snap1.docs[0].id;
+        currentDiamonds = snap1.docs[0].data().diamonds || 0;
+        currentTotalSpent = snap1.docs[0].data().totalSpent || 0;
+        found = true;
+      }
+
+      // 2. Try numericId as number
+      if (!found && !isNaN(parseInt(targetId))) {
+        const q2 = query(usersRef, where('numericId', '==', parseInt(targetId)));
+        const snap2 = await getDocs(q2);
+        if (!snap2.empty) {
+          targetUserId = snap2.docs[0].id;
+          currentDiamonds = snap2.docs[0].data().diamonds || 0;
+          currentTotalSpent = snap2.docs[0].data().totalSpent || 0;
+          found = true;
+        }
+      }
+
+      // 3. Try direct ID (uid)
+      if (!found) {
         const docRef = doc(db, 'users', targetId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           currentDiamonds = docSnap.data().diamonds || 0;
-        } else {
-          throw new Error('لم يتم العثور على المستخدم');
+          currentTotalSpent = docSnap.data().totalSpent || 0;
+          found = true;
         }
+      }
+
+      if (!found) {
+        throw new Error('لم يتم العثور على المستخدم');
       }
 
       // Calculate bonus
@@ -334,7 +401,8 @@ function AgencyPanelModal({ onClose, agentBalance, agentBonus }: { onClose: () =
 
       // Update target user
       await updateDoc(doc(db, 'users', targetUserId), {
-        diamonds: currentDiamonds + totalToReceive
+        diamonds: currentDiamonds + totalToReceive,
+        totalSpent: currentTotalSpent + rechargeAmount
       });
 
       // Update agent balance

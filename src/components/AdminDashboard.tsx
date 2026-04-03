@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown } from 'lucide-react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../contexts/AuthContext';
 import BannersTab from './admin/BannersTab';
@@ -12,7 +12,7 @@ import CPTab from './admin/CPTab';
 import GamesTab from './admin/GamesTab';
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState('gifts');
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,8 +49,33 @@ export default function AdminDashboard() {
     );
   }
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'gifts': return <AddGiftTab />;
+      case 'games': return <GamesTabOld />;
+      case 'gameCenter': return <GamesTab />;
+      case 'store': return <StoreTab />;
+      case 'icons': return <IconsBankTab />;
+      case 'giftBox': return <GiftBoxTab />;
+      case 'badges': return <BadgesTab />;
+      case 'diamonds': return <DiamondsTab />;
+      case 'agencies': return <AgenciesTab />;
+      case 'vip': return <VIPTab />;
+      case 'gift_categories': return <GiftCategoriesTab />;
+      case 'mics': return <MicsTab />;
+      case 'banners': return <BannersTab />;
+      case 'cp': return <CPTab />;
+      case 'backgrounds': return <RoomBackgroundsTab />;
+      case 'myAccount': return <MyAdminAccountTab />;
+      case 'reset': return <AdminResetTab />;
+      case 'users': return <UsersTab />;
+      case 'logs': return <LogsTab />;
+      default: return null;
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="flex flex-col h-full bg-gray-50 relative">
       <div className="bg-white p-4 shadow-sm z-10">
         <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
           <Settings className="text-purple-600" />
@@ -58,63 +83,63 @@ export default function AdminDashboard() {
         </h1>
       </div>
 
-      <div className="flex flex-wrap bg-white border-b border-gray-200">
-        <TabButton active={activeTab === 'gifts'} onClick={() => setActiveTab('gifts')} icon={<Plus size={18} />} label="إضافة هدية" />
-        <TabButton active={activeTab === 'games'} onClick={() => setActiveTab('games')} icon={<Gamepad2 size={18} />} label="الألعاب (هدايا الحظ)" />
-        <TabButton active={activeTab === 'gameCenter'} onClick={() => setActiveTab('gameCenter')} icon={<Gamepad2 size={18} />} label="مركز الألعاب" />
-        <TabButton active={activeTab === 'store'} onClick={() => setActiveTab('store')} icon={<ShoppingBag size={18} />} label="المتجر (إطارات)" />
-        <TabButton active={activeTab === 'icons'} onClick={() => setActiveTab('icons')} icon={<ImageIcon size={18} />} label="بنك الأيقونات" />
-        <TabButton active={activeTab === 'giftBox'} onClick={() => setActiveTab('giftBox')} icon={<Gift size={18} />} label="صندوق الهدايا" />
-        <TabButton active={activeTab === 'badges'} onClick={() => setActiveTab('badges')} icon={<Star size={18} />} label="الأوسمة" />
-        <TabButton active={activeTab === 'diamonds'} onClick={() => setActiveTab('diamonds')} icon={<Diamond size={18} />} label="شحن الألماس" />
-        <TabButton active={activeTab === 'agencies'} onClick={() => setActiveTab('agencies')} icon={<Briefcase size={18} />} label="وكالات الشحن" />
-        <TabButton active={activeTab === 'vip'} onClick={() => setActiveTab('vip')} icon={<Crown size={18} />} label="نظام VIP" />
-        <TabButton active={activeTab === 'gift_categories'} onClick={() => setActiveTab('gift_categories')} icon={<List size={18} />} label="أقسام الهدايا" />
-        <TabButton active={activeTab === 'mics'} onClick={() => setActiveTab('mics')} icon={<Mic size={18} />} label="إدارة المايكات" />
-        <TabButton active={activeTab === 'banners'} onClick={() => setActiveTab('banners')} icon={<ImageIcon size={18} />} label="البنرات" />
-        <TabButton active={activeTab === 'cp'} onClick={() => setActiveTab('cp')} icon={<Users size={18} />} label="إعدادات الـ CP" />
-        <TabButton active={activeTab === 'backgrounds'} onClick={() => setActiveTab('backgrounds')} icon={<ImageIcon size={18} />} label="خلفيات الغرف" />
-        <TabButton active={activeTab === 'myAccount'} onClick={() => setActiveTab('myAccount')} icon={<Users size={18} />} label="حسابي (المدير)" />
-        <TabButton active={activeTab === 'reset'} onClick={() => setActiveTab('reset')} icon={<RefreshCw size={18} />} label="إعادة تعيين الحساب" />
-        <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<List size={18} />} label="سجلات الدخول" />
-        <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<List size={18} />} label="سجل العمليات" />
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <TabCard onClick={() => setActiveTab('gifts')} icon={<Plus size={24} />} label="إضافة هدية" />
+          <TabCard onClick={() => setActiveTab('games')} icon={<Gamepad2 size={24} />} label="الألعاب (هدايا الحظ)" />
+          <TabCard onClick={() => setActiveTab('gameCenter')} icon={<Gamepad2 size={24} />} label="مركز الألعاب" />
+          <TabCard onClick={() => setActiveTab('store')} icon={<ShoppingBag size={24} />} label="المتجر (إطارات)" />
+          <TabCard onClick={() => setActiveTab('icons')} icon={<ImageIcon size={24} />} label="بنك الأيقونات" />
+          <TabCard onClick={() => setActiveTab('giftBox')} icon={<Gift size={24} />} label="صندوق الهدايا" />
+          <TabCard onClick={() => setActiveTab('badges')} icon={<Star size={24} />} label="الأوسمة" />
+          <TabCard onClick={() => setActiveTab('diamonds')} icon={<Diamond size={24} />} label="شحن الألماس" />
+          <TabCard onClick={() => setActiveTab('agencies')} icon={<Briefcase size={24} />} label="وكالات الشحن" />
+          <TabCard onClick={() => setActiveTab('vip')} icon={<Crown size={24} />} label="نظام VIP" />
+          <TabCard onClick={() => setActiveTab('gift_categories')} icon={<List size={24} />} label="أقسام الهدايا" />
+          <TabCard onClick={() => setActiveTab('mics')} icon={<Mic size={24} />} label="إدارة المايكات" />
+          <TabCard onClick={() => setActiveTab('banners')} icon={<ImageIcon size={24} />} label="البنرات" />
+          <TabCard onClick={() => setActiveTab('cp')} icon={<Users size={24} />} label="إعدادات الـ CP" />
+          <TabCard onClick={() => setActiveTab('backgrounds')} icon={<ImageIcon size={24} />} label="خلفيات الغرف" />
+          <TabCard onClick={() => setActiveTab('myAccount')} icon={<Users size={24} />} label="حسابي (المدير)" />
+          <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
+          <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
+          <TabCard onClick={() => setActiveTab('logs')} icon={<List size={24} />} label="سجل العمليات" />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        {activeTab === 'gifts' && <AddGiftTab />}
-        {activeTab === 'games' && <GamesTabOld />}
-        {activeTab === 'gameCenter' && <GamesTab />}
-        {activeTab === 'store' && <StoreTab />}
-        {activeTab === 'icons' && <IconsBankTab />}
-        {activeTab === 'giftBox' && <GiftBoxTab />}
-        {activeTab === 'badges' && <BadgesTab />}
-        {activeTab === 'diamonds' && <DiamondsTab />}
-        {activeTab === 'agencies' && <AgenciesTab />}
-        {activeTab === 'vip' && <VIPTab />}
-        {activeTab === 'gift_categories' && <GiftCategoriesTab />}
-        {activeTab === 'mics' && <MicsTab />}
-        {activeTab === 'banners' && <BannersTab />}
-        {activeTab === 'cp' && <CPTab />}
-        {activeTab === 'backgrounds' && <RoomBackgroundsTab />}
-        {activeTab === 'myAccount' && <MyAdminAccountTab />}
-        {activeTab === 'reset' && <AdminResetTab />}
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'logs' && <LogsTab />}
-      </div>
+      {/* Full Screen Tab View */}
+      {activeTab && (
+        <div className="fixed inset-0 z-[100] bg-gray-50 flex flex-col">
+          <div className="bg-white p-4 shadow-sm flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              {activeTab}
+            </h2>
+            <button 
+              onClick={() => setActiveTab(null)}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {renderTabContent()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TabButton({ active, onClick, icon, label }: any) {
+function TabCard({ onClick, icon, label }: any) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-3 whitespace-nowrap border-b-2 transition-colors ${
-        active ? 'border-purple-600 text-purple-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'
-      }`}
+      className="flex flex-col items-center justify-center gap-3 p-6 bg-white rounded-2xl shadow-sm border border-gray-100 hover:border-purple-200 hover:shadow-md transition-all group"
     >
-      {icon}
-      <span className="text-sm">{label}</span>
+      <div className="p-3 bg-purple-50 rounded-xl text-purple-600 group-hover:scale-110 transition-transform">
+        {icon}
+      </div>
+      <span className="text-sm font-bold text-gray-700">{label}</span>
     </button>
   );
 }
@@ -264,9 +289,9 @@ function StoreTab() {
             {imageUrl && (
               <div className="mt-2 w-full max-w-[200px] aspect-video rounded-lg overflow-hidden border border-gray-200 bg-black">
                 {imageUrl.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
-                  <video src={imageUrl} className="w-full h-full object-cover" autoPlay muted loop />
+                  <video src={imageUrl || undefined} className="w-full h-full object-cover" autoPlay muted loop />
                 ) : (
-                  <img src={imageUrl} className="w-full h-full object-cover" />
+                  <img src={imageUrl || undefined} className="w-full h-full object-cover" />
                 )}
               </div>
             )}
@@ -439,7 +464,7 @@ function IconsBankTab() {
             </div>
             {giftBoxIcon && (
               <div className="w-12 h-12 rounded-lg bg-black/80 flex items-center justify-center shrink-0">
-                <img src={giftBoxIcon} alt="Preview" className="w-8 h-8 object-contain" />
+                <img src={giftBoxIcon || undefined} alt="Preview" className="w-8 h-8 object-contain" />
               </div>
             )}
           </div>
@@ -466,7 +491,7 @@ function IconsBankTab() {
             </div>
             {micIcon && (
               <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center shrink-0 border border-white/20">
-                <img src={micIcon} alt="Preview" className="w-6 h-6 object-contain" />
+                <img src={micIcon || undefined} alt="Preview" className="w-6 h-6 object-contain" />
               </div>
             )}
           </div>
@@ -493,7 +518,7 @@ function IconsBankTab() {
             </div>
             {idIcon && (
               <div className="h-10 px-4 rounded-lg bg-gray-900 flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
-                <img src={idIcon} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={idIcon || undefined} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
                 <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">ID: 1234567</span>
               </div>
             )}
@@ -1973,26 +1998,44 @@ function AgenciesTab() {
     if (!userId || !initialBalance) return alert('الرجاء إدخال ID المستخدم والرصيد');
     setIsSubmitting(true);
     try {
-      // Find user by numericId or uid
+      // Find user by numericId (string or number) or uid
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('numericId', '==', parseInt(userId)));
-      const snapshot = await getDocs(q);
-      
       let targetUserId = userId;
       let targetUserName = 'مستخدم';
-      
-      if (!snapshot.empty) {
-        targetUserId = snapshot.docs[0].id;
-        targetUserName = snapshot.docs[0].data().displayName || 'مستخدم';
-      } else {
-        // Try direct ID
+      let found = false;
+
+      // 1. Try numericId as string
+      const q1 = query(usersRef, where('numericId', '==', userId));
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) {
+        targetUserId = snap1.docs[0].id;
+        targetUserName = snap1.docs[0].data().displayName || 'مستخدم';
+        found = true;
+      }
+
+      // 2. Try numericId as number
+      if (!found && !isNaN(parseInt(userId))) {
+        const q2 = query(usersRef, where('numericId', '==', parseInt(userId)));
+        const snap2 = await getDocs(q2);
+        if (!snap2.empty) {
+          targetUserId = snap2.docs[0].id;
+          targetUserName = snap2.docs[0].data().displayName || 'مستخدم';
+          found = true;
+        }
+      }
+
+      // 3. Try direct ID (uid)
+      if (!found) {
         const docRef = doc(db, 'users', userId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           targetUserName = docSnap.data().displayName || 'مستخدم';
-        } else {
-          throw new Error('لم يتم العثور على المستخدم');
+          found = true;
         }
+      }
+
+      if (!found) {
+        throw new Error('لم يتم العثور على المستخدم');
       }
 
       await addDoc(collection(db, 'agencies'), {

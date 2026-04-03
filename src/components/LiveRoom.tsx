@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2 } from 'lucide-react';
+import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
-import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc, increment, deleteDoc, where, getDocs, writeBatch } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { calculateLevel } from '../lib/levels';
 import BackgroundSelector from './BackgroundSelector';
@@ -24,6 +24,8 @@ export default function LiveRoom({
 }) {
   const { user } = useAuth();
   const [showAdminTools, setShowAdminTools] = useState(false);
+  const [showEditRoomName, setShowEditRoomName] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
   const [roomBackground, setRoomBackground] = useState<any>(null);
   const [showGiftModal, setShowGiftModal] = useState(false);
@@ -50,14 +52,20 @@ export default function LiveRoom({
   const [mics, setMics] = useState<any[]>([]);
   const [gifts, setGifts] = useState<any[]>([]);
   const [storeItems, setStoreItems] = useState<any[]>([]);
+  const [vipLevels, setVipLevels] = useState<any[]>([]);
+  const [userData, setUserData] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
   
   const [activeGiftEvents, setActiveGiftEvents] = useState<any[]>([]);
   const [activeJackpotEvent, setActiveJackpotEvent] = useState<any>(null);
+  const [selectedReceivers, setSelectedReceivers] = useState<string[]>([]);
   const [selectedReceiver, setSelectedReceiver] = useState<string | null>(null);
+  const [showCpChat, setShowCpChat] = useState(false);
+  const [cpMessages, setCpMessages] = useState<any[]>([]);
   const [selectedGift, setSelectedGift] = useState<any>(null);
   const [giftCategory, setGiftCategory] = useState<'classic' | 'lucky'>('classic');
+  const [giftQuantity, setGiftQuantity] = useState(1);
   const [isSendingGift, setIsSendingGift] = useState(false);
   const [userDiamonds, setUserDiamonds] = useState(0);
   const [equippedItems, setEquippedItems] = useState<any>({});
@@ -66,6 +74,12 @@ export default function LiveRoom({
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
   const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string, idIcon?: string}>({});
+  const [confirmModal, setConfirmModal] = useState<{show: boolean, title: string, message: string, onConfirm: () => void}>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
   const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const mountTime = useRef(Date.now());
@@ -95,6 +109,7 @@ export default function LiveRoom({
     const unsubUser = onSnapshot(doc(db, 'users', user.uid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        setUserData(data);
         setUserDiamonds(data.diamonds || 0);
         setEquippedItems({
           mic_frame: data.equippedMicFrame,
@@ -148,6 +163,10 @@ export default function LiveRoom({
       setGifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubVip = onSnapshot(collection(db, 'vip_levels'), (snapshot) => {
+      setVipLevels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubStore = onSnapshot(collection(db, 'store_items'), (snapshot) => {
       setStoreItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -170,7 +189,7 @@ export default function LiveRoom({
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
 
-    const qEvents = query(collection(db, 'rooms', roomId, 'room_events'), orderBy('timestamp', 'desc'), limit(2));
+    const qEvents = query(collection(db, 'rooms', roomId, 'room_events'), orderBy('timestamp', 'desc'), limit(15));
     const unsubEvents = onSnapshot(qEvents, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
@@ -195,7 +214,12 @@ export default function LiveRoom({
       });
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); };
+    const qCpChat = query(collection(db, 'rooms', roomId, 'cp_chat'), orderBy('timestamp', 'asc'), limit(50));
+    const unsubCpChat = onSnapshot(qCpChat, (snapshot) => {
+      setCpMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
   }, [user]);
 
   // Handle entrance effect on join
@@ -267,15 +291,18 @@ export default function LiveRoom({
     }
     
     const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const equippedFrame = userDoc.exists() ? userDoc.data().equippedMicFrame : null;
-    const equippedIcon = userDoc.exists() ? userDoc.data().equippedMicIcon : null;
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    const equippedFrame = userData.equippedMicFrame || null;
+    const equippedIcon = userData.equippedMicIcon || null;
+    const cpPartnerId = userData.cpPartnerId || null;
 
     await updateDoc(doc(db, 'rooms', roomId, 'mics', mic.id), { 
       userId: user.uid, 
       userAvatar: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
       userName: user.displayName || 'مستخدم',
       userMicFrame: equippedFrame || null,
-      userMicIcon: equippedIcon || null
+      userMicIcon: equippedIcon || null,
+      cpPartnerId: cpPartnerId
     });
   };
 
@@ -294,55 +321,45 @@ export default function LiveRoom({
     setChatInput('');
   };
 
-  const executeSendGift = async (gift: any, receiverId: string) => {
-    if (userDiamonds < gift.value) return alert('رصيدك من الألماس لا يكفي!');
+  const executeSendGift = async (gift: any, receiverIds: string[], quantity: number = 1) => {
+    const totalCost = gift.value * receiverIds.length * quantity;
+    if (userDiamonds < totalCost) return alert('رصيدك من الألماس لا يكفي!');
 
     setIsSendingGift(true);
     try {
       await runTransaction(db, async (transaction) => {
         const senderRef = doc(db, 'users', user!.uid);
-        const receiverRef = doc(db, 'users', receiverId);
         
+        // 1. COLLECT ALL REFS FOR READS
+        const receiverRefs = receiverIds.map(id => doc(db, 'users', id));
+        
+        // 2. EXECUTE ALL READS FIRST
         const senderDoc = await transaction.get(senderRef);
-        const receiverDoc = await transaction.get(receiverRef);
-
-        if (!senderDoc.exists() || !receiverDoc.exists()) throw new Error("User not found");
+        if (!senderDoc.exists()) throw new Error("User not found");
         
-        const senderDiamonds = senderDoc.data().diamonds || 0;
-        if (senderDiamonds < gift.value) throw new Error("Not enough diamonds");
-
-        let winAmount = 0;
-        let isWin = false;
-
-        if (gift.category === 'lucky') {
-          const winProb = gift.winProbability || 20;
-          const multiplier = gift.winMultiplier || 5;
-          isWin = Math.random() * 100 < winProb;
-          if (isWin) {
-            winAmount = gift.value * multiplier;
+        const receiverDocsMap = new Map();
+        for (let i = 0; i < receiverIds.length; i++) {
+          const rDoc = await transaction.get(receiverRefs[i]);
+          if (rDoc.exists()) {
+            receiverDocsMap.set(receiverIds[i], rDoc.data());
           }
         }
+        
+        const senderDiamonds = senderDoc.data().diamonds || 0;
+        if (senderDiamonds < totalCost) throw new Error("Not enough diamonds");
 
-        // Deduct gift value from sender, add win amount if they won
-        const currentDailySupport = senderDoc.data().dailySupport || 0;
-        const currentTotalSupport = senderDoc.data().totalSupport || 0;
-        transaction.update(senderRef, { 
-          diamonds: senderDiamonds - gift.value + winAmount,
-          dailySupport: currentDailySupport + gift.value,
-          totalSupport: currentTotalSupport + gift.value
-        });
-        // Receiver always gets the base gift value
-        transaction.update(receiverRef, { diamonds: (receiverDoc.data().diamonds || 0) + gift.value });
+        let totalWinAmount = 0;
+        const isLucky = gift.category === 'lucky';
 
-        transaction.set(doc(collection(db, 'transactions')), {
-          type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value, winAmount, timestamp: new Date().toISOString()
-        });
-
-        if (gift.hasAnimation !== false) {
+        // 3. NOW EXECUTE ALL WRITES
+        
+        // Add one main event for normal gifts if multiple receivers, 
+        // or multiple events for lucky gifts
+        if (!isLucky && gift.hasAnimation !== false) {
           transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
             type: 'gift', 
             senderName: user!.displayName || 'مستخدم', 
-            receiverName: receiverDoc.data().displayName || 'مستخدم', 
+            receiverName: receiverIds.length > 1 ? 'الجميع' : (receiverDocsMap.get(receiverIds[0])?.displayName || 'مستخدم'), 
             giftImageUrl: gift.imageUrl, 
             giftAnimationUrl: gift.link || gift.imageUrl,
             giftAnimationSize: gift.animationSize || 'normal',
@@ -351,46 +368,114 @@ export default function LiveRoom({
             giftName: gift.name, 
             giftCategory: gift.category || 'normal',
             giftEffect: gift.effect || 'normal',
-            receiverId: receiverId,
+            receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
             timestamp: Date.now()
           });
         }
 
-        if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
-          transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-            type: 'lucky_jackpot',
+        for (const receiverId of receiverIds) {
+          const receiverData = receiverDocsMap.get(receiverId);
+          if (!receiverData) continue;
+
+          const receiverRef = doc(db, 'users', receiverId);
+          let winAmount = 0;
+          let isWin = false;
+
+          if (isLucky) {
+            const winProb = gift.winProbability || 20;
+            const multiplier = gift.winMultiplier || 5;
+            isWin = Math.random() * 100 < winProb;
+            if (isWin) {
+              winAmount = gift.value * multiplier;
+              totalWinAmount += winAmount;
+            }
+
+            // For lucky gifts, show animation on each receiver's mic
+            if (gift.hasAnimation !== false) {
+              transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+                type: 'gift', 
+                senderName: user!.displayName || 'مستخدم', 
+                receiverName: receiverData.displayName || 'مستخدم', 
+                giftImageUrl: gift.imageUrl, 
+                giftAnimationUrl: gift.link || gift.imageUrl,
+                giftAnimationSize: 'small', // Small for lucky gifts on mics
+                giftAudioUrl: gift.audioUrl || null,
+                giftDuration: gift.duration || 3,
+                giftName: gift.name, 
+                giftCategory: 'lucky',
+                giftEffect: 'zoom_mic',
+                receiverId: receiverId,
+                timestamp: Date.now() + Math.random() * 500 // Stagger animations slightly
+              });
+            }
+          }
+
+          // Receiver always gets the base gift value
+          transaction.update(receiverRef, { diamonds: increment(gift.value) });
+
+          // Update mic charisma
+          const targetMic = mics.find(m => m.userId === receiverId);
+          if (targetMic) {
+            transaction.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
+              charisma: increment(gift.value)
+            });
+          }
+
+          transaction.set(doc(collection(db, 'transactions')), {
+            type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value * quantity, winAmount, timestamp: new Date().toISOString(), quantity
+          });
+
+          if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
+            transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+              type: 'lucky_jackpot',
+              userName: user!.displayName || 'مستخدم',
+              amount: winAmount,
+              giftName: gift.name,
+              audioUrl: bigWinConfig?.audioUrl || null,
+              timestamp: Date.now()
+            });
+          }
+
+          let chatText = `أرسل 🎁 ${gift.name} ${quantity > 1 ? `(x${quantity})` : ''} إلى ${receiverData.displayName || 'مستخدم'}`;
+          if (isLucky) {
+            chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
+          }
+
+          transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
+            text: chatText,
+            userId: user!.uid,
             userName: user!.displayName || 'مستخدم',
-            amount: winAmount,
-            giftName: gift.name,
-            audioUrl: bigWinConfig?.audioUrl || null,
+            isSystemGift: true,
             timestamp: Date.now()
           });
         }
 
-        let chatText = `أرسل 🎁 ${gift.name} إلى ${receiverDoc.data().displayName || 'مستخدم'}`;
-        if (gift.category === 'lucky') {
-          chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
-        }
+        // Update sender once
+        transaction.update(senderRef, { 
+          diamonds: senderDiamonds - totalCost + totalWinAmount,
+          dailySupport: increment(totalCost),
+          totalSupport: increment(totalCost)
+        });
 
-        transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
-          text: chatText,
-          userId: user!.uid,
-          userName: user!.displayName || 'مستخدم',
-          isSystemGift: true,
-          timestamp: Date.now()
+        // Update room charisma
+        transaction.update(doc(db, 'rooms', roomId), {
+          charisma: increment(totalCost)
         });
       });
 
       setShowGiftModal(false);
       setSelectedGift(null);
+      setSelectedReceivers([]);
 
       // Setup Combo
-      setLastSentGiftData({ gift, receiverId, timestamp: Date.now() });
-      if (comboTimeout) clearTimeout(comboTimeout);
-      const timeout = setTimeout(() => {
-        setLastSentGiftData(null);
-      }, 5000);
-      setComboTimeout(timeout);
+      if (receiverIds.length > 0) {
+        setLastSentGiftData({ gift, receiverId: receiverIds[0], timestamp: Date.now() });
+        if (comboTimeout) clearTimeout(comboTimeout);
+        const timeout = setTimeout(() => {
+          setLastSentGiftData(null);
+        }, 5000);
+        setComboTimeout(timeout);
+      }
 
     } catch (error: any) {
       alert('حدث خطأ: ' + error.message);
@@ -400,14 +485,14 @@ export default function LiveRoom({
   };
 
   const handleSendGift = () => {
-    if (!selectedReceiver) return alert('الرجاء تحديد شخص لإرسال الهدية له');
+    if (selectedReceivers.length === 0) return alert('الرجاء تحديد شخص لإرسال الهدية له');
     if (!selectedGift) return alert('الرجاء تحديد هدية');
-    executeSendGift(selectedGift, selectedReceiver);
+    executeSendGift(selectedGift, selectedReceivers, giftQuantity);
   };
 
   const handleComboClick = () => {
     if (lastSentGiftData) {
-      executeSendGift(lastSentGiftData.gift, lastSentGiftData.receiverId);
+      executeSendGift(lastSentGiftData.gift, [lastSentGiftData.receiverId], giftQuantity);
     }
   };
 
@@ -419,7 +504,7 @@ export default function LiveRoom({
           {roomBackground ? (
             roomBackground.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
               <video 
-                src={roomBackground} 
+                src={roomBackground || undefined} 
                 autoPlay 
                 loop 
                 muted 
@@ -427,7 +512,7 @@ export default function LiveRoom({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <img src={roomBackground} className="w-full h-full object-cover" alt="Background" />
+              <img src={roomBackground || undefined} className="w-full h-full object-cover" alt="Background" />
             )
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-indigo-950 via-purple-950 to-black"></div>
@@ -446,11 +531,11 @@ export default function LiveRoom({
               transition={{ duration: 0.5 }}
               className={`absolute z-[120] pointer-events-none flex justify-center ${showEntrance.isFullScreen ? 'inset-0' : 'top-1/4 left-0 right-0'}`}
             >
-              {showEntrance.audioUrl && <audio autoPlay src={showEntrance.audioUrl} />}
+              {showEntrance.audioUrl && <audio autoPlay src={showEntrance.audioUrl || undefined} />}
               <div className="relative w-full h-full flex justify-center items-center">
-                {showEntrance.imageUrl?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+                {showEntrance.imageUrl?.toLowerCase().match(/\.(mp4|webm|ogg|mov)(\?.*)?$/) ? (
                   <video 
-                    src={showEntrance.imageUrl} 
+                    src={showEntrance.imageUrl || undefined} 
                     autoPlay 
                     loop 
                     muted 
@@ -459,7 +544,7 @@ export default function LiveRoom({
                   />
                 ) : (
                   <img 
-                    src={showEntrance.imageUrl} 
+                    src={showEntrance.imageUrl || undefined} 
                     alt="Entrance" 
                     className={showEntrance.isFullScreen ? "w-full h-full object-cover" : "w-80 h-80 object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.5)]"} 
                   />
@@ -485,7 +570,7 @@ export default function LiveRoom({
               className="absolute top-4 left-4 right-4 z-[110] pointer-events-none"
             >
               {activeJackpotEvent.audioUrl && (
-                <audio src={activeJackpotEvent.audioUrl} autoPlay />
+                <audio src={activeJackpotEvent.audioUrl || undefined} autoPlay />
               )}
               <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 p-[2px] rounded-2xl shadow-[0_0_30px_rgba(234,179,8,0.5)]">
                 <div className="bg-gray-900/90 backdrop-blur-md rounded-2xl p-3 flex items-center gap-3">
@@ -522,7 +607,7 @@ export default function LiveRoom({
               {/* Media */}
               {(() => {
                 const mediaUrl = event.giftAnimationUrl || event.giftImageUrl;
-                const isVideo = mediaUrl?.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) != null;
+                const isVideo = mediaUrl?.toLowerCase().match(/\.(mp4|webm|ogg|mov)(\?.*)?$/) != null || mediaUrl?.includes('video');
                 const isFullscreen = event.giftAnimationSize === 'fullscreen';
                 const isLarge = event.giftAnimationSize === 'large';
                 const isLucky = event.giftCategory === 'lucky';
@@ -578,23 +663,31 @@ export default function LiveRoom({
                 return (
                   <>
                     {event.giftAudioUrl && (
-                      <audio autoPlay src={event.giftAudioUrl} />
+                      <audio autoPlay src={event.giftAudioUrl || undefined} />
                     )}
                     {isVideo ? (
-                      <motion.video autoPlay loop muted playsInline src={mediaUrl} className={`${mediaClass} ${effectClass}`} {...animationProps} />
+                      <motion.video 
+                        key={mediaUrl}
+                        autoPlay 
+                        loop 
+                        muted 
+                        playsInline 
+                        src={mediaUrl || undefined} 
+                        className={`${mediaClass} ${effectClass}`} 
+                        {...animationProps}
+                        onLoadedData={(e) => {
+                          e.currentTarget.play().catch(err => console.error("Video play error:", err));
+                        }}
+                        onCanPlay={(e) => {
+                          e.currentTarget.play().catch(err => console.error("Video play error:", err));
+                        }}
+                      />
                     ) : (
-                      <motion.img src={mediaUrl} className={`${mediaClass} ${effectClass}`} {...animationProps} />
+                      <motion.img key={mediaUrl} src={mediaUrl || undefined} className={`${mediaClass} ${effectClass}`} {...animationProps} />
                     )}
                   </>
                 );
               })()}
-
-              {/* Text Banner */}
-              <div className="bg-gradient-to-r from-purple-600/80 to-pink-500/80 px-6 py-2 rounded-full backdrop-blur-md mb-8 border border-white/20 shadow-[0_0_30px_rgba(236,72,153,0.5)] z-10 absolute top-1/4">
-                <span className="text-yellow-300 font-bold">{event.senderName}</span>
-                <span className="mx-2 text-white">أرسل إلى</span>
-                <span className="text-pink-300 font-bold">{event.receiverName}</span>
-              </div>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -605,8 +698,8 @@ export default function LiveRoom({
             <div className="flex items-center gap-2 bg-black/40 rounded-full p-1 pr-3 backdrop-blur-md">
               <img src="https://picsum.photos/seed/host/50/50" alt="Host" className="w-8 h-8 rounded-full border border-purple-400" referrerPolicy="no-referrer" />
               <div className="flex flex-col">
-                <span className="text-xs font-bold">الغرفة العامة 🎵</span>
-                <span className="text-[8px] text-gray-300">ID: 10001</span>
+                <span className="text-xs font-bold">{room?.name || 'الغرفة العامة'} 🎵</span>
+                <span className="text-[8px] text-gray-300">ID: {room?.numericId || '10001'}</span>
               </div>
             </div>
             
@@ -628,16 +721,36 @@ export default function LiveRoom({
                   className="flex flex-col items-center relative cursor-pointer group"
                 >
                   <div className="relative">
-                    <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'}`}>
+                    {/* Lucky Gift Icon Overlay */}
+                    <AnimatePresence>
+                      {activeGiftEvents.filter(e => e.giftCategory === 'lucky' && e.receiverId === mic.userId).map(e => (
+                        <motion.div
+                          key={e.timestamp}
+                          initial={{ scale: 0, y: 0, opacity: 0 }}
+                          animate={{ scale: [0, 1.2, 1], y: -20, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          className="absolute -top-8 left-1/2 -translate-x-1/2 z-20"
+                        >
+                          <img src={e.giftImageUrl || undefined} className="w-8 h-8 object-contain drop-shadow-lg" />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+
+                    <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'} ${mic.userId && mic.cpPartnerId && mics.some(m => m.userId === mic.cpPartnerId) ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/20' : ''}`}>
                       {mic.userId ? (
                         <>
-                          <img src={mic.userAvatar} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={mic.userAvatar || undefined} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                          {mic.userId && mic.cpPartnerId && mics.some(m => m.userId === mic.cpPartnerId) && (
+                            <div className="absolute -top-1 -right-1 z-30 animate-bounce">
+                              <Heart size={16} className="text-pink-500 fill-pink-500 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]" />
+                            </div>
+                          )}
                           {mic.userMicFrame && (
-                            <img src={mic.userMicFrame} className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none scale-125" />
+                            <img src={mic.userMicFrame || undefined} className="absolute inset-0 w-full h-full object-cover z-10 pointer-events-none scale-125" />
                           )}
                           {mic.userMicIcon && (
                             <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center border border-gray-700 z-20">
-                              <img src={mic.userMicIcon} className="w-4 h-4 object-contain" />
+                              <img src={mic.userMicIcon || undefined} className="w-4 h-4 object-contain" />
                             </div>
                           )}
                         </>
@@ -646,7 +759,7 @@ export default function LiveRoom({
                           {mic.status === 'locked' ? (
                             <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full"><ShieldBan size={20} className="text-red-400/50" /></div>
                           ) : appIcons.micIcon ? (
-                            <img src={appIcons.micIcon} alt="Mic" className="w-full h-full object-contain drop-shadow-md" />
+                            <img src={appIcons.micIcon || undefined} alt="Mic" className="w-full h-full object-contain drop-shadow-md" />
                           ) : (
                             <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full"><Mic size={20} className="text-white/30" /></div>
                           )}
@@ -654,8 +767,47 @@ export default function LiveRoom({
                       )}
                     </div>
                     {mic.userId && (
-                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[9px] px-2 py-0.5 rounded-full whitespace-nowrap backdrop-blur-sm border border-white/10 max-w-[60px] truncate">
-                        {mic.userName}
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                        <div className="bg-black/80 text-white text-[9px] px-2 py-0.5 rounded-full whitespace-nowrap backdrop-blur-sm border border-white/10 max-w-[60px] truncate mb-0.5">
+                          {mic.userName}
+                        </div>
+                        {/* Charisma Bar */}
+                        {(() => {
+                          const charisma = mic.charisma || 0;
+                          const level = charisma >= 100000 ? 4 : charisma >= 20000 ? 3 : charisma >= 5000 ? 2 : 1;
+                          const colors = {
+                            1: 'from-gray-400 to-gray-600',
+                            2: 'from-purple-400 to-indigo-600',
+                            3: 'from-yellow-400 to-orange-600',
+                            4: 'from-pink-400 to-rose-600'
+                          }[level];
+                          const glow = {
+                            1: 'shadow-none',
+                            2: 'shadow-[0_0_10px_rgba(168,85,247,0.3)]',
+                            3: 'shadow-[0_0_15px_rgba(234,179,8,0.3)]',
+                            4: 'shadow-[0_0_20px_rgba(236,72,153,0.4)]'
+                          }[level];
+
+                          return (
+                            <div className={`flex items-center gap-0.5 bg-black/60 px-1.5 py-0.5 rounded-full border border-white/10 ${glow} transition-all duration-500`}>
+                              <div className={`w-1 h-1 rounded-full bg-gradient-to-tr ${colors} animate-pulse`} />
+                              <span className={`text-[8px] font-black tracking-tighter ${
+                                level === 4 ? 'text-pink-300' :
+                                level === 3 ? 'text-yellow-300' :
+                                level === 2 ? 'text-purple-300' :
+                                'text-gray-300'
+                              }`}>
+                                {charisma.toLocaleString()}
+                              </span>
+                              <Heart size={7} className={`fill-current ${
+                                level === 4 ? 'text-pink-500' :
+                                level === 3 ? 'text-yellow-500' :
+                                level === 2 ? 'text-purple-500' :
+                                'text-red-500'
+                              }`} />
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -676,7 +828,7 @@ export default function LiveRoom({
                 className={`w-fit max-w-[80%] px-3 py-1.5 rounded-xl backdrop-blur-sm break-words relative ${msg.isSystemGift ? 'bg-pink-500/30 border border-pink-500/50' : msg.userBubble ? 'bg-transparent' : 'bg-black/30'}`}
               >
                 {msg.userBubble && !msg.isSystemGift && (
-                  <img src={msg.userBubble} className="absolute inset-0 w-full h-full object-fill z-0 rounded-xl opacity-90 pointer-events-none" />
+                  <img src={msg.userBubble || undefined} className="absolute inset-0 w-full h-full object-fill z-0 rounded-xl opacity-90 pointer-events-none" />
                 )}
                 <div className="relative z-10">
                   <span 
@@ -724,7 +876,7 @@ export default function LiveRoom({
                   className="absolute -top-16 left-4 z-50 bg-gradient-to-r from-pink-500 to-purple-600 p-1 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.5)] border-2 border-white/20 flex flex-col items-center justify-center w-14 h-14 overflow-hidden group"
                 >
                   <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
-                  <img src={lastSentGiftData.gift.imageUrl} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
+                  <img src={lastSentGiftData.gift.imageUrl || undefined} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
                   <span className="text-[9px] font-black text-white z-10 mt-0.5">تكرار</span>
                   
                   {/* Timer Progress Bar */}
@@ -756,6 +908,15 @@ export default function LiveRoom({
               <button className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <Mic size={20} />
               </button>
+              {user && room.speakers?.some((s: any) => s.uid === user.uid) && (
+                <button 
+                  onClick={() => setShowCpChat(true)}
+                  className="bg-pink-500/20 p-2.5 rounded-full backdrop-blur-md hover:bg-pink-500/30 transition border border-pink-500/30 text-pink-500"
+                  title="دردشة CP"
+                >
+                  <Heart size={20} />
+                </button>
+              )}
               <button onClick={() => setShowAdminTools(true)} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <MoreHorizontal size={20} />
               </button>
@@ -789,7 +950,7 @@ export default function LiveRoom({
                 setShowGiftModal(true);
               }} className="hover:scale-110 transition active:scale-95 drop-shadow-2xl">
                 {appIcons.giftBoxIcon ? (
-                  <img src={appIcons.giftBoxIcon} alt="Gift" className="w-12 h-12 object-contain" />
+                  <img src={appIcons.giftBoxIcon || undefined} alt="Gift" className="w-12 h-12 object-contain" />
                 ) : (
                   <div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center shadow-lg shadow-pink-500/50">
                     <Gift size={24} className="text-white" />
@@ -818,20 +979,76 @@ export default function LiveRoom({
               <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
                 {/* Receiver Selection */}
                 <div className="mb-5">
-                  <p className="text-sm text-gray-300 mb-3 font-bold">إرسال إلى:</p>
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-sm text-gray-300 font-bold">إرسال إلى:</p>
+                    {selectedReceivers.length > 0 && (
+                      <button 
+                        onClick={() => setSelectedReceivers([])}
+                        className="text-[10px] text-red-400 font-bold flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20"
+                      >
+                        <X size={12} />
+                        إلغاء الكل
+                      </button>
+                    )}
+                  </div>
                   <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+                    <button 
+                      onClick={() => {
+                        const allUserIds = mics.filter(m => m.userId).map(m => m.userId!);
+                        if (selectedReceivers.length === allUserIds.length) {
+                          setSelectedReceivers([]);
+                        } else {
+                          setSelectedReceivers(allUserIds);
+                        }
+                      }}
+                      className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceivers.length > 0 && selectedReceivers.length === mics.filter(m => m.userId).length ? 'border-yellow-500 bg-yellow-500/20 scale-105' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                    >
+                      <div className="w-11 h-11 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50 relative">
+                        <Users size={20} className="text-yellow-500" />
+                        {selectedReceivers.length > 0 && selectedReceivers.length === mics.filter(m => m.userId).length && (
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedReceivers([]);
+                            }}
+                            className="absolute -top-1 -left-1 bg-red-500 rounded-full p-0.5 border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
+                          >
+                            <X size={10} className="text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-200">الكل</span>
+                    </button>
+
                     {mics.filter(m => m.userId).map(m => (
                       <button 
                         key={m.userId}
-                        onClick={() => setSelectedReceiver(m.userId)}
-                        className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceiver === m.userId ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                        onClick={() => {
+                          if (selectedReceivers.includes(m.userId!)) {
+                            setSelectedReceivers(prev => prev.filter(id => id !== m.userId));
+                          } else {
+                            setSelectedReceivers(prev => [...prev, m.userId!]);
+                          }
+                        }}
+                        className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceivers.includes(m.userId!) ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                       >
                         <div className="relative">
-                          <img src={m.userAvatar} className={`w-11 h-11 rounded-full object-cover ${selectedReceiver === m.userId ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/50' : ''}`} />
-                          {selectedReceiver === m.userId && (
-                            <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-0.5 border border-black/50">
-                              <Check size={10} className="text-white" />
-                            </div>
+                          <img src={m.userAvatar || undefined} className={`w-11 h-11 rounded-full object-cover ${selectedReceivers.includes(m.userId!) ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/50' : ''}`} />
+                          {selectedReceivers.includes(m.userId!) && (
+                            <>
+                              <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-0.5 border border-black/50">
+                                <Check size={10} className="text-white" />
+                              </div>
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReceivers(prev => prev.filter(id => id !== m.userId));
+                                }}
+                                className="absolute -top-1 -left-1 bg-red-500 rounded-full p-0.5 border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
+                              >
+                                <X size={10} className="text-white" />
+                              </div>
+                            </>
                           )}
                         </div>
                         <span className="text-[10px] font-medium truncate w-full text-center text-gray-200">{m.userName}</span>
@@ -869,7 +1086,7 @@ export default function LiveRoom({
                         onClick={() => setSelectedGift(gift)}
                         className={`rounded-2xl p-2.5 flex flex-col items-center gap-1.5 border transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                       >
-                        <img src={gift.imageUrl} alt={gift.name} className="w-12 h-12 object-contain drop-shadow-md" />
+                        <img src={gift.imageUrl || undefined} alt={gift.name} className="w-12 h-12 object-contain drop-shadow-md" />
                         <span className="text-[9px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
                         <div className="flex items-center gap-1 text-yellow-400 text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
                           {gift.value} 💎
@@ -885,17 +1102,34 @@ export default function LiveRoom({
 
               {/* Footer / Send Button */}
               <div className="p-3 bg-black/50 border-t border-white/10 backdrop-blur-md">
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar mb-3 pb-1">
+                  {[1, 10, 66, 99, 520, 1314].map(q => (
+                    <button
+                      key={q}
+                      onClick={() => setGiftQuantity(q)}
+                      className={`px-3 py-1 rounded-full text-[10px] font-black transition-all border ${giftQuantity === q ? 'bg-pink-500 text-white border-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.4)]' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+                    >
+                      x{q}
+                    </button>
+                  ))}
+                </div>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1">
                     {selectedGift ? (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 relative group">
                         <div className="bg-white/10 p-1.5 rounded-xl border border-white/5">
-                          <img src={selectedGift.imageUrl} className="w-7 h-7 object-contain" />
+                          <img src={selectedGift.imageUrl || undefined} className="w-7 h-7 object-contain" />
                         </div>
                         <div>
                           <p className="text-xs font-bold text-white">{selectedGift.name}</p>
                           <p className="text-[10px] text-yellow-400 font-bold">{selectedGift.value} 💎</p>
                         </div>
+                        <button 
+                          onClick={() => setSelectedGift(null)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        >
+                          <X size={10} />
+                        </button>
                       </div>
                     ) : (
                       <p className="text-xs text-gray-400 font-medium ml-2">لم يتم تحديد هدية</p>
@@ -903,8 +1137,8 @@ export default function LiveRoom({
                   </div>
                   <button 
                     onClick={handleSendGift}
-                    disabled={!selectedGift || !selectedReceiver || isSendingGift}
-                    className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all ${(!selectedGift || !selectedReceiver || isSendingGift) ? 'bg-white/10 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 border border-pink-400/50'}`}
+                    disabled={!selectedGift || selectedReceivers.length === 0 || isSendingGift}
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all ${(!selectedGift || selectedReceivers.length === 0 || isSendingGift) ? 'bg-white/10 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 border border-pink-400/50'}`}
                   >
                     {isSendingGift ? (
                       <span className="animate-pulse text-xs">جاري الإرسال...</span>
@@ -939,6 +1173,29 @@ export default function LiveRoom({
                   { icon: <Music />, label: 'موسيقى', color: 'text-green-400' },
                   { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
                   { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
+                  { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
+                    setShowAdminTools(false);
+                    setConfirmModal({
+                      show: true,
+                      title: 'تصفير الكاريزما',
+                      message: 'هل أنت متأكد من تصفير كاريزما الغرفة والمايكات؟ لا يمكن التراجع عن هذا الإجراء.',
+                      onConfirm: async () => {
+                        await updateDoc(doc(db, 'rooms', roomId), { charisma: 0 });
+                        const micsSnap = await getDocs(collection(db, 'rooms', roomId, 'mics'));
+                        const batch = writeBatch(db);
+                        micsSnap.docs.forEach(d => {
+                          batch.update(d.ref, { charisma: 0 });
+                        });
+                        await batch.commit();
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                      }
+                    });
+                  }},
+                  { icon: <Edit3 />, label: 'تغيير الاسم', color: 'text-blue-400', action: () => {
+                    setShowAdminTools(false);
+                    setNewRoomName(room?.name || '');
+                    setShowEditRoomName(true);
+                  }},
                 ].map((tool, idx) => (
                   <div key={idx} onClick={tool.action} className="flex flex-col items-center gap-2 cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center ${tool.color}`}>
@@ -949,6 +1206,44 @@ export default function LiveRoom({
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Edit Room Name Modal */}
+        {showEditRoomName && (
+          <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gray-900 w-full max-w-sm rounded-3xl p-6 border border-white/10 shadow-2xl"
+            >
+              <h3 className="text-lg font-bold mb-4 text-center">تغيير اسم الغرفة</h3>
+              <input 
+                type="text" 
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                placeholder="أدخل اسم الغرفة الجديد"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm mb-6 focus:outline-none focus:border-purple-500 transition-all"
+              />
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowEditRoomName(false)}
+                  className="flex-1 py-3 rounded-xl bg-gray-800 font-bold text-sm hover:bg-gray-700 transition"
+                >
+                  إلغاء
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (!newRoomName.trim()) return;
+                    await updateDoc(doc(db, 'rooms', roomId), { name: newRoomName });
+                    setShowEditRoomName(false);
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-bold text-sm shadow-lg shadow-purple-500/20"
+                >
+                  حفظ
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
 
@@ -1000,6 +1295,39 @@ export default function LiveRoom({
           </div>
         )}
 
+        {/* Custom Confirmation Modal */}
+        <AnimatePresence>
+          {confirmModal.show && (
+            <div className="absolute inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-gray-900 w-full max-w-sm rounded-3xl p-6 border border-white/10 shadow-2xl"
+              >
+                <h3 className="text-lg font-bold mb-4 text-center text-white">{confirmModal.title}</h3>
+                <p className="text-gray-400 text-sm text-center mb-6">{confirmModal.message}</p>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setConfirmModal({ ...confirmModal, show: false })}
+                    className="flex-1 py-3 rounded-xl bg-gray-800 font-bold text-sm hover:bg-gray-700 transition text-white"
+                  >
+                    إلغاء
+                  </button>
+                  <button 
+                    onClick={() => {
+                      confirmModal.onConfirm();
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-bold text-sm shadow-lg shadow-purple-500/20 text-white"
+                  >
+                    تأكيد
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Mall Modal */}
         {showMallModal && (
           <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowMallModal(false)}>
@@ -1022,6 +1350,7 @@ export default function LiveRoom({
                   { id: 'chat_bubble', label: 'فقاعات' },
                   { id: 'text_color', label: 'كتابة ملونة' },
                   { id: 'room_background', label: 'خلفيات الغرف' },
+                  { id: 'vip', label: 'VIP 👑' },
                   { id: 'bag', label: 'الحقيبة 🎒' }
                 ].map(tab => (
                   <button
@@ -1069,7 +1398,7 @@ export default function LiveRoom({
                             {item.type === 'text_color' ? (
                               <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
                             ) : (
-                              <img src={item.imageUrl} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
+                              <img src={item.imageUrl || undefined} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
                             )}
                             {item.type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
                             {item.type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
@@ -1146,6 +1475,70 @@ export default function LiveRoom({
                       <div className="col-span-3 text-center text-gray-400 py-10">الحقيبة فارغة</div>
                     )}
                   </div>
+                ) : mallCategory === 'vip' ? (
+                  <div className="grid grid-cols-2 gap-4 pb-10">
+                    {vipLevels.map((level: any) => {
+                      const isMyVip = userData?.vipLevel === level.levelNumber;
+                      return (
+                        <div key={level.id} className={`bg-gray-800/50 border ${isMyVip ? 'border-yellow-500' : 'border-gray-700'} rounded-2xl p-4 flex flex-col items-center relative overflow-hidden`}>
+                          <div className="absolute -top-4 -right-4 w-12 h-12 bg-yellow-500/10 rounded-full blur-xl"></div>
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-white font-black text-2xl shadow-lg mb-3">
+                            V{level.levelNumber}
+                          </div>
+                          <h4 className="text-white text-xs font-bold mb-1">{level.name}</h4>
+                          <div className="flex items-center gap-1 mb-4">
+                            <span className="text-yellow-400 font-bold text-sm">{(level.levelNumber * 5000).toLocaleString()}</span>
+                            <span className="text-[8px] text-gray-400">💎</span>
+                          </div>
+                          
+                          <button 
+                            onClick={async () => {
+                              if (!user) return;
+                              const cost = level.levelNumber * 5000;
+                              if (userDiamonds < cost) return alert('رصيدك غير كافٍ');
+                              
+                              setConfirmModal({
+                                show: true,
+                                title: 'شراء VIP',
+                                message: `هل تريد شراء ${level.name} بـ ${cost.toLocaleString()} ماسة؟`,
+                                onConfirm: async () => {
+                                  try {
+                                    await runTransaction(db, async (transaction) => {
+                                      const userRef = doc(db, 'users', user.uid);
+                                      const userSnap = await transaction.get(userRef);
+                                      if (!userSnap.exists()) return;
+                                      
+                                      const currentDiamonds = userSnap.data().diamonds || 0;
+                                      if (currentDiamonds < cost) throw new Error('رصيدك غير كافٍ');
+                                      
+                                      transaction.update(userRef, {
+                                        diamonds: currentDiamonds - cost,
+                                        vipLevel: level.levelNumber,
+                                        isVIP: true,
+                                        equippedMicFrame: level.frameUrl || userSnap.data().equippedMicFrame,
+                                        equippedEntrance: level.entranceEffectUrl ? {
+                                          imageUrl: level.entranceEffectUrl,
+                                          isFullScreen: true,
+                                          duration: 4
+                                        } : userSnap.data().equippedEntrance
+                                      });
+                                    });
+                                    setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                                  } catch (error: any) {
+                                    alert('خطأ في الشراء: ' + error.message);
+                                  }
+                                }
+                              });
+                            }}
+                            className={`w-full py-2 rounded-xl text-xs font-bold transition ${isMyVip ? 'bg-gray-700 text-gray-400 cursor-default' : 'bg-yellow-500 text-black hover:bg-yellow-600'}`}
+                            disabled={isMyVip}
+                          >
+                            {isMyVip ? 'مفعل حالياً' : 'شراء الآن'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-4 pb-10">
                     {storeItems.filter(item => item.type === mallCategory).map(item => (
@@ -1154,7 +1547,7 @@ export default function LiveRoom({
                         {item.type === 'text_color' ? (
                           <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
                         ) : (
-                          <img src={item.imageUrl} alt={item.name} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
+                          <img src={item.imageUrl || undefined} alt={item.name} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
                         )}
                         {item.type === 'mic_frame' && <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-full h-full rounded-full object-cover opacity-50" />}
                         {item.type === 'mic_icon' && <Mic size={20} className="text-gray-400" />}
@@ -1278,6 +1671,70 @@ export default function LiveRoom({
           <GameCenterModal onClose={() => setShowGameCenter(false)} />
         )}
 
+        {/* CP Chat Modal */}
+        {showCpChat && (
+          <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setShowCpChat(false)}>
+            <div className="bg-gray-900 w-full rounded-t-3xl p-6 border-t border-gray-800 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)] h-[60%] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <Heart className="text-pink-500" size={20} />
+                  <h3 className="text-lg font-bold text-white">دردشة الـ CP</h3>
+                </div>
+                <button onClick={() => setShowCpChat(false)} className="text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto mb-4 space-y-3 hide-scrollbar">
+                {cpMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500 gap-2">
+                    <Heart size={40} className="opacity-20" />
+                    <p className="text-sm">ابدأ الدردشة مع شريكك</p>
+                  </div>
+                ) : (
+                  cpMessages.map((msg, idx) => (
+                    <div key={idx} className={`flex flex-col ${msg.userId === user?.uid ? 'items-end' : 'items-start'}`}>
+                      <div className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${msg.userId === user?.uid ? 'bg-pink-600 text-white rounded-tr-none' : 'bg-gray-800 text-gray-200 rounded-tl-none'}`}>
+                        {msg.text}
+                      </div>
+                      <span className="text-[8px] text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!chatInput.trim() || !user) return;
+                  const msg = {
+                    text: chatInput,
+                    userId: user.uid,
+                    userName: user.displayName,
+                    timestamp: Date.now()
+                  };
+                  try {
+                    await addDoc(collection(db, 'rooms', roomId, 'cp_chat'), msg);
+                    setChatInput('');
+                  } catch (err) {
+                    console.error('Error sending CP message:', err);
+                  }
+                }}
+                className="flex gap-2"
+              >
+                <input 
+                  type="text" 
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  placeholder="اكتب رسالة خاصة..." 
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-full px-4 py-2 text-sm text-white outline-none focus:border-pink-500"
+                />
+                <button type="submit" className="bg-pink-600 p-2 rounded-full text-white hover:bg-pink-700 transition">
+                  <Send size={20} />
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* User Profile Modal */}
         {selectedProfile && (
           <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProfile(null)}>
@@ -1285,12 +1742,12 @@ export default function LiveRoom({
               <button onClick={() => setSelectedProfile(null)} className="absolute top-4 left-4 text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
               
               <div className="flex flex-col items-center -mt-12 mb-4">
-                <img src={selectedProfile.avatar} className="w-24 h-24 rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
+                <img src={selectedProfile.avatar || undefined} className="w-24 h-24 rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
                 <h3 className="text-xl font-bold text-white mt-2">{selectedProfile.name}</h3>
                 
                 <div className="mt-2 relative h-8 px-6 flex items-center justify-center overflow-hidden rounded-lg border border-white/10 group">
                   {appIcons.idIcon && (
-                    <img src={appIcons.idIcon} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                    <img src={appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" />
                   )}
                   <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">
                     ID: {selectedProfile.numericId || selectedProfile.uid.substring(0,8)}
@@ -1312,7 +1769,7 @@ export default function LiveRoom({
               {selectedProfile.cpPartnerId && (
                 <div className="border border-pink-500/30 rounded-2xl p-4 mb-6 relative overflow-hidden flex items-center justify-between">
                   {selectedProfile.cpBackground ? (
-                    <img src={selectedProfile.cpBackground} className="absolute inset-0 w-full h-full object-cover" style={{ imageRendering: 'high-quality' }} alt="CP Background" />
+                    <img src={selectedProfile.cpBackground || undefined} className="absolute inset-0 w-full h-full object-cover" style={{ imageRendering: 'high-quality' }} alt="CP Background" />
                   ) : (
                     <div className="absolute inset-0 bg-gray-800/50"></div>
                   )}
@@ -1321,9 +1778,9 @@ export default function LiveRoom({
                   <div className="relative z-10 flex items-center gap-4 w-full justify-center">
                     <div className="flex flex-col items-center">
                       <div className="relative w-14 h-14 flex items-center justify-center">
-                        <img src={selectedProfile.avatar} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="User" referrerPolicy="no-referrer" />
+                        <img src={selectedProfile.avatar || undefined} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="User" referrerPolicy="no-referrer" />
                         {selectedProfile.equippedCpFrame && (
-                          <img src={selectedProfile.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                          <img src={selectedProfile.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
                         )}
                       </div>
                       <span className="text-[9px] font-bold text-white mt-3 truncate max-w-[60px] bg-black/50 px-2 py-0.5 rounded-full">{selectedProfile.name}</span>
@@ -1336,9 +1793,9 @@ export default function LiveRoom({
 
                     <div className="flex flex-col items-center">
                       <div className="relative w-14 h-14 flex items-center justify-center">
-                        <img src={selectedProfile.cpPartnerAvatar} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="Partner" referrerPolicy="no-referrer" />
+                        <img src={selectedProfile.cpPartnerAvatar || undefined} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="Partner" referrerPolicy="no-referrer" />
                         {selectedProfile.equippedCpFrame && (
-                          <img src={selectedProfile.equippedCpFrame} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                          <img src={selectedProfile.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
                         )}
                       </div>
                       <span className="text-[9px] font-bold text-white mt-3 truncate max-w-[60px] bg-black/50 px-2 py-0.5 rounded-full">{selectedProfile.cpPartnerName}</span>
@@ -1353,7 +1810,7 @@ export default function LiveRoom({
                   {selectedProfile.badges && selectedProfile.badges.length > 0 ? (
                     selectedProfile.badges.map((badge: any) => (
                       <div key={badge.id} className="group/badge relative">
-                        <img src={badge.imageUrl} alt={badge.name} className="w-10 h-10 object-contain hover:scale-110 transition drop-shadow-lg" />
+                        <img src={badge.imageUrl || undefined} alt={badge.name} className="w-10 h-10 object-contain hover:scale-110 transition drop-shadow-lg" />
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover/badge:opacity-100 whitespace-nowrap pointer-events-none z-50">
                           {badge.name}
                         </div>
@@ -1380,50 +1837,97 @@ export default function LiveRoom({
 
               {/* Room Admin Controls */}
               {room.hostId === user?.uid && selectedProfile.uid !== user?.uid && (
-                <div className="mt-4 flex gap-3 border-t border-gray-800 pt-4">
-                  <button 
-                    onClick={async () => {
-                      if (!confirm('هل أنت متأكد من طرد هذا المستخدم من الغرفة؟')) return;
-                      try {
-                        const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
-                        const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
-                        await updateDoc(doc(db, 'rooms', roomId), {
-                          audience: newAudience,
-                          speakers: newSpeakers
+                <>
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-800 pt-4">
+                    <button 
+                      onClick={async () => {
+                        if (!confirm('هل أنت متأكد من طرد هذا المستخدم من الغرفة؟')) return;
+                        try {
+                          const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
+                          const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
+                          await updateDoc(doc(db, 'rooms', roomId), {
+                            audience: newAudience,
+                            speakers: newSpeakers
+                          });
+                          setSelectedProfile(null);
+                        } catch (error) {
+                          console.error('Error kicking user:', error);
+                        }
+                      }}
+                      className="flex-1 bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 transition py-2.5 rounded-xl font-bold border border-orange-500/30 flex items-center justify-center gap-2 text-xs"
+                    >
+                      طرد
+                    </button>
+                    {selectedProfile.cpPartnerId && (
+                      <button 
+                        onClick={async () => {
+                          setConfirmModal({
+                            show: true,
+                            title: 'إلغاء CP',
+                            message: 'هل أنت متأكد من إلغاء علاقة الـ CP؟',
+                            onConfirm: async () => {
+                              try {
+                                const partnerId = selectedProfile.cpPartnerId;
+                                await updateDoc(doc(db, 'users', selectedProfile.uid), {
+                                  cpPartnerId: null,
+                                  cpPartnerName: null,
+                                  cpPartnerAvatar: null,
+                                  equippedCpFrame: null,
+                                  cpBackground: null
+                                });
+                                await updateDoc(doc(db, 'users', partnerId), {
+                                  cpPartnerId: null,
+                                  cpPartnerName: null,
+                                  cpPartnerAvatar: null,
+                                  equippedCpFrame: null,
+                                  cpBackground: null
+                                });
+                                setSelectedProfile(null);
+                                setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                              } catch (error) {
+                                console.error('Error cancelling CP:', error);
+                              }
+                            }
+                          });
+                        }}
+                        className="flex-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 transition py-2.5 rounded-xl font-bold border border-red-500/30 flex items-center justify-center gap-2 text-xs"
+                      >
+                        إلغاء CP
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-4 flex gap-3 border-t border-gray-800 pt-4">
+                    <button 
+                      onClick={async () => {
+                        setConfirmModal({
+                          show: true,
+                          title: 'حظر مستخدم',
+                          message: 'هل أنت متأكد من حظر هذا المستخدم من الغرفة نهائياً؟',
+                          onConfirm: async () => {
+                            try {
+                              const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
+                              const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
+                              const newBanned = [...(room.bannedUsers || []), selectedProfile.uid];
+                              await updateDoc(doc(db, 'rooms', roomId), {
+                                audience: newAudience,
+                                speakers: newSpeakers,
+                                bannedUsers: newBanned
+                              });
+                              setSelectedProfile(null);
+                              setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                            } catch (error) {
+                              console.error('Error banning user:', error);
+                            }
+                          }
                         });
-                        setSelectedProfile(null);
-                      } catch (error) {
-                        console.error('Error kicking user:', error);
-                      }
-                    }}
-                    className="flex-1 bg-orange-500/20 text-orange-500 hover:bg-orange-500/30 transition py-2.5 rounded-xl font-bold border border-orange-500/30 flex items-center justify-center gap-2"
-                  >
-                    <User size={16} />
-                    طرد
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      if (!confirm('هل أنت متأكد من حظر هذا المستخدم من الغرفة نهائياً؟')) return;
-                      try {
-                        const newAudience = (room.audience || []).filter((a: any) => a.uid !== selectedProfile.uid);
-                        const newSpeakers = (room.speakers || []).filter((s: any) => s.uid !== selectedProfile.uid);
-                        const newBanned = [...(room.bannedUsers || []), selectedProfile.uid];
-                        await updateDoc(doc(db, 'rooms', roomId), {
-                          audience: newAudience,
-                          speakers: newSpeakers,
-                          bannedUsers: newBanned
-                        });
-                        setSelectedProfile(null);
-                      } catch (error) {
-                        console.error('Error banning user:', error);
-                      }
-                    }}
-                    className="flex-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 transition py-2.5 rounded-xl font-bold border border-red-500/30 flex items-center justify-center gap-2"
-                  >
-                    <ShieldBan size={16} />
-                    حظر
-                  </button>
-                </div>
+                      }}
+                      className="flex-1 bg-red-500/20 text-red-500 hover:bg-red-500/30 transition py-2.5 rounded-xl font-bold border border-red-500/30 flex items-center justify-center gap-2"
+                    >
+                      <ShieldBan size={16} />
+                      حظر
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>

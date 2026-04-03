@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, writeBatch } from 'firebase/firestore';
-import { Trash2, Edit2, Coins, Image as ImageIcon, Search } from 'lucide-react';
+import { Trash2, Edit2, Coins, Image as ImageIcon, Search, Tag } from 'lucide-react';
 
 export default function UsersTab() {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,6 +9,7 @@ export default function UsersTab() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [coinsAmount, setCoinsAmount] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [idIconUrl, setIdIconUrl] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -45,6 +46,18 @@ export default function UsersTab() {
       await updateDoc(doc(db, 'users', selectedUser.id), { photoURL: avatarUrl });
       alert('تم تحديث الصورة بنجاح');
       setAvatarUrl('');
+      setSelectedUser(null);
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  const handleUpdateIdIcon = async () => {
+    if (!selectedUser || !idIconUrl) return alert('الرجاء إدخال رابط الأيقونة');
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), { idIcon: idIconUrl });
+      alert('تم تحديث أيقونة الـ ID بنجاح');
+      setIdIconUrl('');
       setSelectedUser(null);
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -154,6 +167,9 @@ export default function UsersTab() {
                       <button onClick={() => setSelectedUser({ ...user, action: 'avatar' })} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" title="تغيير الصورة">
                         <ImageIcon size={18} />
                       </button>
+                      <button onClick={() => setSelectedUser({ ...user, action: 'idIcon' })} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg" title="تغيير أيقونة الـ ID">
+                        <Tag size={18} />
+                      </button>
                       <button onClick={() => handleDeleteUser(user)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="حذف الحساب">
                         <Trash2 size={18} />
                       </button>
@@ -240,6 +256,30 @@ export default function UsersTab() {
               </div>
               <button onClick={handleUpdateAvatar} className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl">
                 حفظ الصورة
+              </button>
+              <button onClick={() => setSelectedUser(null)} className="w-full text-gray-500 py-2">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedUser && selectedUser.action === 'idIcon' && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">تغيير أيقونة الـ ID لـ {selectedUser.displayName}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">رابط الأيقونة الجديدة</label>
+                <input
+                  type="url"
+                  value={idIconUrl}
+                  onChange={e => setIdIconUrl(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl"
+                  placeholder="https://..."
+                />
+              </div>
+              <button onClick={handleUpdateIdIcon} className="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl">
+                حفظ الأيقونة
               </button>
               <button onClick={() => setSelectedUser(null)} className="w-full text-gray-500 py-2">إلغاء</button>
             </div>
