@@ -198,13 +198,16 @@ export default function LiveRoom({
     const unsubEvents = onSnapshot(qEvents, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === 'added') {
-          const event = change.doc.data();
+          const event = { id: change.doc.id, ...change.doc.data() } as any;
           // Only show events that happened after the component mounted AND within the last 5 seconds
           if (event.timestamp > mountTime.current && event.timestamp > Date.now() - 5000) {
             if (event.type === 'gift') {
+              // Skip if it's our own gift event (we already showed it optimistically)
+              if (event.senderId === user.uid) return;
+              
               setActiveGiftEvents(prev => [...prev, event]);
               setTimeout(() => {
-                setActiveGiftEvents(prev => prev.filter(e => e.timestamp !== event.timestamp));
+                setActiveGiftEvents(prev => prev.filter(e => e.id !== event.id));
               }, (event.giftDuration || 6) * 1000);
             } else if (event.type === 'lucky_jackpot') {
               setActiveJackpotEvent(event);
@@ -330,165 +333,214 @@ export default function LiveRoom({
     const totalCost = gift.value * receiverIds.length * quantity;
     if (userDiamonds < totalCost) return alert('رصيدك من الألماس لا يكفي!');
 
-    setIsSendingGift(true);
-    try {
-      await runTransaction(db, async (transaction) => {
-        const senderRef = doc(db, 'users', user!.uid);
-        
-        // 1. COLLECT ALL REFS FOR READS
-        const receiverRefs = receiverIds.map(id => doc(db, 'users', id));
-        
-        // 2. EXECUTE ALL READS FIRST
-        const senderDoc = await transaction.get(senderRef);
-        if (!senderDoc.exists()) throw new Error("User not found");
-        
-        const receiverDocsMap = new Map();
-        for (let i = 0; i < receiverIds.length; i++) {
-          const rDoc = await transaction.get(receiverRefs[i]);
-          if (rDoc.exists()) {
-            receiverDocsMap.set(receiverIds[i], rDoc.data());
-          }
-        }
-        
-        const senderDiamonds = senderDoc.data().diamonds || 0;
-        if (senderDiamonds < totalCost) throw new Error("Not enough diamonds");
+    // Optimistic UI Update
+    setUserDiamonds(prev => prev - totalCost);
+    
+    const isLucky = gift.category === 'lucky';
+    const clientEventId = 'evt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const localEvents: any[] = [];
+    
+    if (!isLucky && gift.hasAnimation !== false) {
+      localEvents.push({
+        id: clientEventId,
+        type: 'gift',
+        senderName: user!.displayName || 'مستخدم',
+        receiverName: receiverIds.length > 1 ? 'الجميع' : (mics.find(m => m.userId === receiverIds[0])?.userName || 'مستخدم'),
+        giftImageUrl: gift.imageUrl,
+        giftAnimationUrl: gift.link || gift.imageUrl,
+        giftAnimationSize: gift.animationSize || 'normal',
+        giftSize: gift.giftSize || null,
+        giftAudioUrl: gift.audioUrl || null,
+        giftDuration: gift.duration || 6,
+        giftName: gift.name,
+        giftCategory: gift.category || 'normal',
+        giftEffect: gift.effect || 'normal',
+        receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
+        timestamp: Date.now(),
+        senderId: user!.uid
+      });
+    } else if (isLucky && gift.hasAnimation !== false) {
+      receiverIds.forEach((receiverId, index) => {
+        localEvents.push({
+          id: `${clientEventId}_${index}`,
+          type: 'gift',
+          senderName: user!.displayName || 'مستخدم',
+          receiverName: mics.find(m => m.userId === receiverId)?.userName || 'مستخدم',
+          giftImageUrl: gift.imageUrl,
+          giftAnimationUrl: gift.link || gift.imageUrl,
+          giftAnimationSize: gift.animationSize || 'small',
+          giftSize: gift.giftSize || null,
+          giftAudioUrl: gift.audioUrl || null,
+          giftDuration: gift.duration || 3,
+          giftName: gift.name,
+          giftCategory: 'lucky',
+          giftEffect: 'zoom_mic',
+          receiverId: receiverId,
+          timestamp: Date.now() + Math.random() * 500,
+          senderId: user!.uid
+        });
+      });
+    }
 
-        let totalWinAmount = 0;
-        const isLucky = gift.category === 'lucky';
+    localEvents.forEach(event => {
+      setActiveGiftEvents(prev => [...prev, event]);
+      setTimeout(() => {
+        setActiveGiftEvents(prev => prev.filter(e => e.id !== event.id));
+      }, (event.giftDuration || 6) * 1000);
+    });
 
-        // 3. NOW EXECUTE ALL WRITES
-        
-        // Add one main event for normal gifts if multiple receivers, 
-        // or multiple events for lucky gifts
-        if (!isLucky && gift.hasAnimation !== false) {
-          transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-            type: 'gift', 
-            senderName: user!.displayName || 'مستخدم', 
-            receiverName: receiverIds.length > 1 ? 'الجميع' : (receiverDocsMap.get(receiverIds[0])?.displayName || 'مستخدم'), 
-            giftImageUrl: gift.imageUrl, 
-            giftAnimationUrl: gift.link || gift.imageUrl,
-            giftAnimationSize: gift.animationSize || 'normal',
-            giftSize: gift.giftSize || null,
-            giftAudioUrl: gift.audioUrl || null,
-            giftDuration: gift.duration || 6,
-            giftName: gift.name, 
-            giftCategory: gift.category || 'normal',
-            giftEffect: gift.effect || 'normal',
-            receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
-            timestamp: Date.now()
-          });
-        }
+    // Setup Combo immediately
+    if (receiverIds.length > 0) {
+      setLastSentGiftData({ gift, receiverId: receiverIds[0], timestamp: Date.now() });
+      if (comboTimeout) clearTimeout(comboTimeout);
+      const timeout = setTimeout(() => {
+        setLastSentGiftData(null);
+      }, 5000);
+      setComboTimeout(timeout);
+    }
 
-        for (const receiverId of receiverIds) {
-          const receiverData = receiverDocsMap.get(receiverId);
-          if (!receiverData) continue;
-
-          const receiverRef = doc(db, 'users', receiverId);
-          let winAmount = 0;
-          let isWin = false;
-
-          if (isLucky) {
-            const winProb = gift.winProbability || 20;
-            const multiplier = gift.winMultiplier || 5;
-            isWin = Math.random() * 100 < winProb;
-            if (isWin) {
-              winAmount = gift.value * multiplier;
-              totalWinAmount += winAmount;
+    // Run backend transaction in background
+    (async () => {
+      try {
+        await runTransaction(db, async (transaction) => {
+          const senderRef = doc(db, 'users', user!.uid);
+          
+          // 1. COLLECT ALL REFS FOR READS
+          const receiverRefs = receiverIds.map(id => doc(db, 'users', id));
+          
+          // 2. EXECUTE ALL READS FIRST
+          const senderDoc = await transaction.get(senderRef);
+          if (!senderDoc.exists()) throw new Error("User not found");
+          
+          const receiverDocsMap = new Map();
+          for (let i = 0; i < receiverIds.length; i++) {
+            const rDoc = await transaction.get(receiverRefs[i]);
+            if (rDoc.exists()) {
+              receiverDocsMap.set(receiverIds[i], rDoc.data());
             }
-
-            // For lucky gifts, show animation on each receiver's mic
-            if (gift.hasAnimation !== false) {
-              transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-                type: 'gift', 
-                senderName: user!.displayName || 'مستخدم', 
-                receiverName: receiverData.displayName || 'مستخدم', 
-                giftImageUrl: gift.imageUrl, 
-                giftAnimationUrl: gift.link || gift.imageUrl,
-                giftAnimationSize: gift.animationSize || 'small',
-                giftSize: gift.giftSize || null,
-                giftAudioUrl: gift.audioUrl || null,
-                giftDuration: gift.duration || 3,
-                giftName: gift.name, 
-                giftCategory: 'lucky',
-                giftEffect: 'zoom_mic',
-                receiverId: receiverId,
-                timestamp: Date.now() + Math.random() * 500 // Stagger animations slightly
-              });
-            }
           }
+          
+          const senderDiamonds = senderDoc.data().diamonds || 0;
+          if (senderDiamonds < totalCost) throw new Error("Not enough diamonds");
 
-          // Receiver always gets the base gift value
-          transaction.update(receiverRef, { diamonds: increment(gift.value) });
+          let totalWinAmount = 0;
 
-          // Update mic charisma
-          const targetMic = mics.find(m => m.userId === receiverId);
-          if (targetMic) {
-            transaction.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
-              charisma: increment(gift.value)
-            });
-          }
-
-          transaction.set(doc(collection(db, 'transactions')), {
-            type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value * quantity, winAmount, timestamp: new Date().toISOString(), quantity
-          });
-
-          if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
+          // 3. NOW EXECUTE ALL WRITES
+          
+          if (!isLucky && gift.hasAnimation !== false) {
             transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-              type: 'lucky_jackpot',
-              userName: user!.displayName || 'مستخدم',
-              amount: winAmount,
-              giftName: gift.name,
-              audioUrl: bigWinConfig?.audioUrl || null,
+              type: 'gift', 
+              senderId: user!.uid,
+              clientEventId: clientEventId,
+              senderName: user!.displayName || 'مستخدم', 
+              receiverName: receiverIds.length > 1 ? 'الجميع' : (receiverDocsMap.get(receiverIds[0])?.displayName || 'مستخدم'), 
+              giftImageUrl: gift.imageUrl, 
+              giftAnimationUrl: gift.link || gift.imageUrl,
+              giftAnimationSize: gift.animationSize || 'normal',
+              giftSize: gift.giftSize || null,
+              giftAudioUrl: gift.audioUrl || null,
+              giftDuration: gift.duration || 6,
+              giftName: gift.name, 
+              giftCategory: gift.category || 'normal',
+              giftEffect: gift.effect || 'normal',
+              receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
               timestamp: Date.now()
             });
           }
 
-          let chatText = `أرسل 🎁 ${gift.name} ${quantity > 1 ? `(x${quantity})` : ''} إلى ${receiverData.displayName || 'مستخدم'}`;
-          if (isLucky) {
-            chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
+          for (let i = 0; i < receiverIds.length; i++) {
+            const receiverId = receiverIds[i];
+            const receiverData = receiverDocsMap.get(receiverId);
+            if (!receiverData) continue;
+
+            const receiverRef = doc(db, 'users', receiverId);
+            let winAmount = 0;
+            let isWin = false;
+
+            if (isLucky) {
+              const winProb = gift.winProbability || 20;
+              const multiplier = gift.winMultiplier || 5;
+              isWin = Math.random() * 100 < winProb;
+              if (isWin) {
+                winAmount = gift.value * multiplier;
+                totalWinAmount += winAmount;
+              }
+
+              if (gift.hasAnimation !== false) {
+                transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+                  type: 'gift', 
+                  senderId: user!.uid,
+                  clientEventId: `${clientEventId}_${i}`,
+                  senderName: user!.displayName || 'مستخدم', 
+                  receiverName: receiverData.displayName || 'مستخدم', 
+                  giftImageUrl: gift.imageUrl, 
+                  giftAnimationUrl: gift.link || gift.imageUrl,
+                  giftAnimationSize: gift.animationSize || 'small',
+                  giftSize: gift.giftSize || null,
+                  giftAudioUrl: gift.audioUrl || null,
+                  giftDuration: gift.duration || 3,
+                  giftName: gift.name, 
+                  giftCategory: 'lucky',
+                  giftEffect: 'zoom_mic',
+                  receiverId: receiverId,
+                  timestamp: Date.now() + Math.random() * 500
+                });
+              }
+            }
+
+            transaction.update(receiverRef, { diamonds: increment(gift.value) });
+
+            const targetMic = mics.find(m => m.userId === receiverId);
+            if (targetMic) {
+              transaction.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
+                charisma: increment(gift.value)
+              });
+            }
+
+            transaction.set(doc(collection(db, 'transactions')), {
+              type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value * quantity, winAmount, timestamp: new Date().toISOString(), quantity
+            });
+
+            if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
+              transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+                type: 'lucky_jackpot',
+                userName: user!.displayName || 'مستخدم',
+                amount: winAmount,
+                giftName: gift.name,
+                audioUrl: bigWinConfig?.audioUrl || null,
+                timestamp: Date.now()
+              });
+            }
+
+            let chatText = `أرسل 🎁 ${gift.name} ${quantity > 1 ? `(x${quantity})` : ''} إلى ${receiverData.displayName || 'مستخدم'}`;
+            if (isLucky) {
+              chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
+            }
+
+            transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
+              text: chatText,
+              userId: user!.uid,
+              userName: user!.displayName || 'مستخدم',
+              isSystemGift: true,
+              timestamp: Date.now()
+            });
           }
 
-          transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
-            text: chatText,
-            userId: user!.uid,
-            userName: user!.displayName || 'مستخدم',
-            isSystemGift: true,
-            timestamp: Date.now()
+          transaction.update(senderRef, { 
+            diamonds: senderDiamonds - totalCost + totalWinAmount,
+            dailySupport: increment(totalCost),
+            totalSupport: increment(totalCost)
           });
-        }
 
-        // Update sender once
-        transaction.update(senderRef, { 
-          diamonds: senderDiamonds - totalCost + totalWinAmount,
-          dailySupport: increment(totalCost),
-          totalSupport: increment(totalCost)
+          transaction.update(doc(db, 'rooms', roomId), {
+            charisma: increment(totalCost)
+          });
         });
-
-        // Update room charisma
-        transaction.update(doc(db, 'rooms', roomId), {
-          charisma: increment(totalCost)
-        });
-      });
-
-      setShowGiftModal(false);
-      setSelectedGift(null);
-      setSelectedReceivers([]);
-
-      // Setup Combo
-      if (receiverIds.length > 0) {
-        setLastSentGiftData({ gift, receiverId: receiverIds[0], timestamp: Date.now() });
-        if (comboTimeout) clearTimeout(comboTimeout);
-        const timeout = setTimeout(() => {
-          setLastSentGiftData(null);
-        }, 5000);
-        setComboTimeout(timeout);
+      } catch (error: any) {
+        console.error('Background gift error:', error);
+        alert('حدث خطأ في إرسال الهدية: ' + error.message);
       }
-
-    } catch (error: any) {
-      alert('حدث خطأ: ' + error.message);
-    } finally {
-      setIsSendingGift(false);
-    }
+    })();
   };
 
   const handleSendGift = () => {
