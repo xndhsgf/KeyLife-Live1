@@ -137,9 +137,12 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
         </div>
         
         <div className="flex items-center gap-4 mt-4">
-          <div className="relative">
-            <img src={isEditing ? (editPhotoURL || "https://picsum.photos/seed/myprofile/100/100") : (user?.photoURL || "https://picsum.photos/seed/myprofile/100/100")} alt="Profile" className="w-20 h-20 rounded-full object-cover border-2 border-purple-100" referrerPolicy="no-referrer" />
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-white">
+          <div className="relative w-20 h-20 flex items-center justify-center">
+            <img src={isEditing ? (editPhotoURL || "https://picsum.photos/seed/myprofile/100/100") : (user?.photoURL || "https://picsum.photos/seed/myprofile/100/100")} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-purple-100" referrerPolicy="no-referrer" />
+            {userData?.equippedMicFrame && !isEditing && (
+              <img src={userData.equippedMicFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="Avatar Frame" />
+            )}
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-white z-20">
               Lv. {Math.max(chargingLevel, supportLevel)}
             </div>
           </div>

@@ -72,7 +72,7 @@ export default function LiveRoom({
   const [equippedItems, setEquippedItems] = useState<any>({});
   const [purchasedItems, setPurchasedItems] = useState<any[]>([]);
   const [showEntrance, setShowEntrance] = useState<any>(null);
-  const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverId: string, timestamp: number} | null>(null);
+  const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverIds: string[], timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
   const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string, idIcon?: string}>({});
   const [confirmModal, setConfirmModal] = useState<{show: boolean, title: string, message: string, onConfirm: () => void}>({
@@ -275,6 +275,11 @@ export default function LiveRoom({
       } else {
         const userDoc = await getDoc(doc(db, 'users', mic.userId));
         const userData = userDoc.exists() ? userDoc.data() : {};
+        let partnerData: any = {};
+        if (userData.cpPartnerId) {
+          const partnerDoc = await getDoc(doc(db, 'users', userData.cpPartnerId));
+          if (partnerDoc.exists()) partnerData = partnerDoc.data();
+        }
         setSelectedProfile({ 
           uid: mic.userId, 
           name: mic.userName, 
@@ -287,7 +292,10 @@ export default function LiveRoom({
           cpPartnerName: userData.cpPartnerName,
           cpPartnerAvatar: userData.cpPartnerAvatar,
           equippedCpFrame: userData.equippedCpFrame,
-          cpBackground: userData.cpBackground
+          cpBackground: userData.cpBackground,
+          equippedMicFrame: userData.equippedMicFrame,
+          partnerCpFrame: partnerData.equippedCpFrame || null,
+          partnerMicFrame: partnerData.equippedMicFrame || null
         });
       }
       return;
@@ -391,7 +399,7 @@ export default function LiveRoom({
 
     // Setup Combo immediately
     if (receiverIds.length > 0) {
-      setLastSentGiftData({ gift, receiverId: receiverIds[0], timestamp: Date.now() });
+      setLastSentGiftData({ gift, receiverIds: receiverIds, timestamp: Date.now() });
       if (comboTimeout) clearTimeout(comboTimeout);
       const timeout = setTimeout(() => {
         setLastSentGiftData(null);
@@ -404,140 +412,122 @@ export default function LiveRoom({
     // Run backend transaction in background
     (async () => {
       try {
-        await runTransaction(db, async (transaction) => {
-          const senderRef = doc(db, 'users', user!.uid);
-          
-          // 1. COLLECT ALL REFS FOR READS
-          const receiverRefs = receiverIds.map(id => doc(db, 'users', id));
-          
-          // 2. EXECUTE ALL READS FIRST
-          const senderDoc = await transaction.get(senderRef);
-          if (!senderDoc.exists()) throw new Error("User not found");
-          
-          const receiverDocsMap = new Map();
-          for (let i = 0; i < receiverIds.length; i++) {
-            const rDoc = await transaction.get(receiverRefs[i]);
-            if (rDoc.exists()) {
-              receiverDocsMap.set(receiverIds[i], rDoc.data());
+        const batch = writeBatch(db);
+        const senderRef = doc(db, 'users', user!.uid);
+        
+        let totalWinAmount = 0;
+
+        // 3. NOW EXECUTE ALL WRITES
+        
+        if (!isLucky && gift.hasAnimation !== false) {
+          batch.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+            type: 'gift', 
+            senderId: user!.uid,
+            clientEventId: clientEventId,
+            senderName: user!.displayName || 'مستخدم', 
+            receiverName: receiverIds.length > 1 ? 'الجميع' : (mics.find(m => m.userId === receiverIds[0])?.userName || 'مستخدم'), 
+            giftImageUrl: gift.imageUrl, 
+            giftAnimationUrl: gift.link || gift.imageUrl,
+            giftAnimationSize: gift.animationSize || 'normal',
+            giftSize: gift.giftSize || null,
+            giftAudioUrl: gift.audioUrl || null,
+            giftDuration: gift.duration || 6,
+            giftName: gift.name, 
+            giftCategory: gift.category || 'normal',
+            giftEffect: gift.effect || 'normal',
+            receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
+            timestamp: Date.now()
+          });
+        }
+
+        for (let i = 0; i < receiverIds.length; i++) {
+          const receiverId = receiverIds[i];
+          const receiverName = mics.find(m => m.userId === receiverId)?.userName || 'مستخدم';
+
+          const receiverRef = doc(db, 'users', receiverId);
+          let winAmount = 0;
+          let isWin = false;
+
+          if (isLucky) {
+            const winProb = gift.winProbability || 20;
+            const multiplier = gift.winMultiplier || 5;
+            isWin = Math.random() * 100 < winProb;
+            if (isWin) {
+              winAmount = gift.value * multiplier;
+              totalWinAmount += winAmount;
+            }
+
+            if (gift.hasAnimation !== false) {
+              batch.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+                type: 'gift', 
+                senderId: user!.uid,
+                clientEventId: `${clientEventId}_${i}`,
+                senderName: user!.displayName || 'مستخدم', 
+                receiverName: receiverName, 
+                giftImageUrl: gift.imageUrl, 
+                giftAnimationUrl: gift.link || gift.imageUrl,
+                giftAnimationSize: gift.animationSize || 'small',
+                giftSize: gift.giftSize || null,
+                giftAudioUrl: gift.audioUrl || null,
+                giftDuration: gift.duration || 3,
+                giftName: gift.name, 
+                giftCategory: 'lucky',
+                giftEffect: 'zoom_mic',
+                receiverId: receiverId,
+                timestamp: Date.now() + Math.random() * 500
+              });
             }
           }
-          
-          const senderDiamonds = senderDoc.data().diamonds || 0;
-          if (senderDiamonds < totalCost) throw new Error("Not enough diamonds");
 
-          let totalWinAmount = 0;
+          batch.update(receiverRef, { diamonds: increment(gift.value) });
 
-          // 3. NOW EXECUTE ALL WRITES
-          
-          if (!isLucky && gift.hasAnimation !== false) {
-            transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-              type: 'gift', 
-              senderId: user!.uid,
-              clientEventId: clientEventId,
-              senderName: user!.displayName || 'مستخدم', 
-              receiverName: receiverIds.length > 1 ? 'الجميع' : (receiverDocsMap.get(receiverIds[0])?.displayName || 'مستخدم'), 
-              giftImageUrl: gift.imageUrl, 
-              giftAnimationUrl: gift.link || gift.imageUrl,
-              giftAnimationSize: gift.animationSize || 'normal',
-              giftSize: gift.giftSize || null,
-              giftAudioUrl: gift.audioUrl || null,
-              giftDuration: gift.duration || 6,
-              giftName: gift.name, 
-              giftCategory: gift.category || 'normal',
-              giftEffect: gift.effect || 'normal',
-              receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
-              timestamp: Date.now()
+          const targetMic = mics.find(m => m.userId === receiverId);
+          if (targetMic) {
+            batch.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
+              charisma: increment(gift.value)
             });
           }
 
-          for (let i = 0; i < receiverIds.length; i++) {
-            const receiverId = receiverIds[i];
-            const receiverData = receiverDocsMap.get(receiverId);
-            if (!receiverData) continue;
+          batch.set(doc(collection(db, 'transactions')), {
+            type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value * quantity, winAmount, timestamp: new Date().toISOString(), quantity
+          });
 
-            const receiverRef = doc(db, 'users', receiverId);
-            let winAmount = 0;
-            let isWin = false;
-
-            if (isLucky) {
-              const winProb = gift.winProbability || 20;
-              const multiplier = gift.winMultiplier || 5;
-              isWin = Math.random() * 100 < winProb;
-              if (isWin) {
-                winAmount = gift.value * multiplier;
-                totalWinAmount += winAmount;
-              }
-
-              if (gift.hasAnimation !== false) {
-                transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-                  type: 'gift', 
-                  senderId: user!.uid,
-                  clientEventId: `${clientEventId}_${i}`,
-                  senderName: user!.displayName || 'مستخدم', 
-                  receiverName: receiverData.displayName || 'مستخدم', 
-                  giftImageUrl: gift.imageUrl, 
-                  giftAnimationUrl: gift.link || gift.imageUrl,
-                  giftAnimationSize: gift.animationSize || 'small',
-                  giftSize: gift.giftSize || null,
-                  giftAudioUrl: gift.audioUrl || null,
-                  giftDuration: gift.duration || 3,
-                  giftName: gift.name, 
-                  giftCategory: 'lucky',
-                  giftEffect: 'zoom_mic',
-                  receiverId: receiverId,
-                  timestamp: Date.now() + Math.random() * 500
-                });
-              }
-            }
-
-            transaction.update(receiverRef, { diamonds: increment(gift.value) });
-
-            const targetMic = mics.find(m => m.userId === receiverId);
-            if (targetMic) {
-              transaction.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
-                charisma: increment(gift.value)
-              });
-            }
-
-            transaction.set(doc(collection(db, 'transactions')), {
-              type: 'gift', senderId: user!.uid, receiverId: receiverId, giftId: gift.id, amount: gift.value * quantity, winAmount, timestamp: new Date().toISOString(), quantity
-            });
-
-            if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
-              transaction.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
-                type: 'lucky_jackpot',
-                userName: user!.displayName || 'مستخدم',
-                amount: winAmount,
-                giftName: gift.name,
-                audioUrl: bigWinConfig?.audioUrl || null,
-                timestamp: Date.now()
-              });
-            }
-
-            let chatText = `أرسل 🎁 ${gift.name} ${quantity > 1 ? `(x${quantity})` : ''} إلى ${receiverData.displayName || 'مستخدم'}`;
-            if (isLucky) {
-              chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
-            }
-
-            transaction.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
-              text: chatText,
-              userId: user!.uid,
+          if (isWin && winAmount >= (bigWinConfig?.threshold || 100000)) {
+            batch.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+              type: 'lucky_jackpot',
               userName: user!.displayName || 'مستخدم',
-              isSystemGift: true,
+              amount: winAmount,
+              giftName: gift.name,
+              audioUrl: bigWinConfig?.audioUrl || null,
               timestamp: Date.now()
             });
           }
 
-          transaction.update(senderRef, { 
-            diamonds: senderDiamonds - totalCost + totalWinAmount,
-            dailySupport: increment(totalCost),
-            totalSupport: increment(totalCost)
-          });
+          let chatText = `أرسل 🎁 ${gift.name} ${quantity > 1 ? `(x${quantity})` : ''} إلى ${receiverName}`;
+          if (isLucky) {
+            chatText += isWin ? ` وفاز بـ ${winAmount} 💎! 🎉` : ` ولم يحالفه الحظ 😢`;
+          }
 
-          transaction.update(doc(db, 'rooms', roomId), {
-            charisma: increment(totalCost)
+          batch.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
+            text: chatText,
+            userId: user!.uid,
+            userName: user!.displayName || 'مستخدم',
+            isSystemGift: true,
+            timestamp: Date.now()
           });
+        }
+
+        batch.update(senderRef, { 
+          diamonds: increment(-totalCost + totalWinAmount),
+          dailySupport: increment(totalCost),
+          totalSupport: increment(totalCost)
         });
+
+        batch.update(doc(db, 'rooms', roomId), {
+          charisma: increment(totalCost)
+        });
+        
+        await batch.commit();
       } catch (error: any) {
         console.error('Background gift error:', error);
         alert('حدث خطأ في إرسال الهدية: ' + error.message);
@@ -553,7 +543,7 @@ export default function LiveRoom({
 
   const handleComboClick = () => {
     if (lastSentGiftData) {
-      executeSendGift(lastSentGiftData.gift, [lastSentGiftData.receiverId], giftQuantity);
+      executeSendGift(lastSentGiftData.gift, lastSentGiftData.receiverIds, giftQuantity);
     }
   };
 
@@ -903,6 +893,11 @@ export default function LiveRoom({
                     onClick={async () => {
                       const userDoc = await getDoc(doc(db, 'users', msg.userId));
                       const userData = userDoc.exists() ? userDoc.data() : {};
+                      let partnerData: any = {};
+                      if (userData.cpPartnerId) {
+                        const partnerDoc = await getDoc(doc(db, 'users', userData.cpPartnerId));
+                        if (partnerDoc.exists()) partnerData = partnerDoc.data();
+                      }
                       setSelectedProfile({
                         uid: msg.userId,
                         name: msg.userName,
@@ -915,7 +910,10 @@ export default function LiveRoom({
                         cpPartnerName: userData.cpPartnerName,
                         cpPartnerAvatar: userData.cpPartnerAvatar,
                         equippedCpFrame: userData.equippedCpFrame,
-                        cpBackground: userData.cpBackground
+                        cpBackground: userData.cpBackground,
+                        equippedMicFrame: userData.equippedMicFrame,
+                        partnerCpFrame: partnerData.equippedCpFrame || null,
+                        partnerMicFrame: partnerData.equippedMicFrame || null
                       });
                     }}
                     className={`${msg.isSystemGift ? 'text-pink-300' : 'text-purple-300'} text-xs font-bold mr-1 cursor-pointer hover:underline`}
@@ -992,6 +990,11 @@ export default function LiveRoom({
                 if (!user) return;
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 const userData = userDoc.exists() ? userDoc.data() : {};
+                let partnerData: any = {};
+                if (userData.cpPartnerId) {
+                  const partnerDoc = await getDoc(doc(db, 'users', userData.cpPartnerId));
+                  if (partnerDoc.exists()) partnerData = partnerDoc.data();
+                }
                 setSelectedProfile({ 
                   uid: user.uid, 
                   name: user.displayName, 
@@ -1004,7 +1007,10 @@ export default function LiveRoom({
                   cpPartnerName: userData.cpPartnerName,
                   cpPartnerAvatar: userData.cpPartnerAvatar,
                   equippedCpFrame: userData.equippedCpFrame,
-                  cpBackground: userData.cpBackground
+                  cpBackground: userData.cpBackground,
+                  equippedMicFrame: userData.equippedMicFrame,
+                  partnerCpFrame: partnerData.equippedCpFrame || null,
+                  partnerMicFrame: partnerData.equippedMicFrame || null
                 });
               }} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <User size={20} />
@@ -1819,7 +1825,12 @@ export default function LiveRoom({
               <button onClick={() => setSelectedProfile(null)} className="absolute top-4 left-4 text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
               
               <div className="flex flex-col items-center -mt-12 mb-4">
-                <img src={selectedProfile.avatar || undefined} className="w-24 h-24 rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  <img src={selectedProfile.avatar || undefined} className="w-full h-full rounded-full border-4 border-gray-900 object-cover shadow-xl" referrerPolicy="no-referrer" />
+                  {selectedProfile.equippedMicFrame && (
+                    <img src={selectedProfile.equippedMicFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="Avatar Frame" />
+                  )}
+                </div>
                 <h3 className="text-xl font-bold text-white mt-2">{selectedProfile.name}</h3>
                 
                 <div className="mt-2 relative h-8 px-6 flex items-center justify-center overflow-hidden rounded-lg border border-white/10 group">
@@ -1871,8 +1882,11 @@ export default function LiveRoom({
                     <div className="flex flex-col items-center">
                       <div className="relative w-14 h-14 flex items-center justify-center">
                         <img src={selectedProfile.cpPartnerAvatar || undefined} className="w-full h-full rounded-full object-cover border-2 border-white/50" alt="Partner" referrerPolicy="no-referrer" />
-                        {selectedProfile.equippedCpFrame && (
-                          <img src={selectedProfile.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                        {(selectedProfile.partnerCpFrame || selectedProfile.equippedCpFrame) && (
+                          <img src={selectedProfile.partnerCpFrame || selectedProfile.equippedCpFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="CP Frame" />
+                        )}
+                        {selectedProfile.partnerMicFrame && (
+                          <img src={selectedProfile.partnerMicFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-20" alt="Partner Mic Frame" />
                         )}
                       </div>
                       <span className="text-[9px] font-bold text-white mt-3 truncate max-w-[60px] bg-black/50 px-2 py-0.5 rounded-full">{selectedProfile.cpPartnerName}</span>
