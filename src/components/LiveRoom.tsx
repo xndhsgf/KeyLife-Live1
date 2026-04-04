@@ -399,6 +399,8 @@ export default function LiveRoom({
       setComboTimeout(timeout);
     }
 
+    setShowGiftModal(false);
+
     // Run backend transaction in background
     (async () => {
       try {
