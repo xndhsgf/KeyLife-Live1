@@ -21,19 +21,21 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   const [showGameCenter, setShowGameCenter] = useState(false);
   const [showAgencyPanel, setShowAgencyPanel] = useState(false);
   const [showMall, setShowMall] = useState(false);
+  const [showVipCenter, setShowVipCenter] = useState(false);
 
   useEffect(() => {
     const handleBack = () => {
       if (showGameCenter) { setShowGameCenter(false); return true; }
       if (showAgencyPanel) { setShowAgencyPanel(false); return true; }
       if (showMall) { setShowMall(false); return true; }
+      if (showVipCenter) { setShowVipCenter(false); return true; }
       if (isEditing) { setIsEditing(false); return true; }
       return false;
     };
 
     registerBackHandler(handleBack);
     return () => unregisterBackHandler(handleBack);
-  }, [isEditing, showGameCenter, showAgencyPanel, showMall]);
+  }, [isEditing, showGameCenter, showAgencyPanel, showMall, showVipCenter]);
 
   useEffect(() => {
     if (user) {
@@ -91,7 +93,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
   };
   
   const menuItems = [
-    { icon: <Crown size={20} />, label: 'VIP', color: 'text-yellow-500', bg: 'bg-yellow-50', action: () => setShowMall(true) },
+    { icon: <Crown size={20} />, label: 'VIP', color: 'text-yellow-500', bg: 'bg-yellow-50', action: () => setShowVipCenter(true) },
     { icon: <ShoppingBag size={20} />, label: 'المول', color: 'text-pink-500', bg: 'bg-pink-50', action: () => setShowMall(true) },
     { icon: <TrendingUp size={20} />, label: 'مستوى الشحن', color: 'text-cyan-500', bg: 'bg-cyan-50', value: `Lv. ${chargingLevel}`, progress: chargingProgress },
     { icon: <Award size={20} />, label: 'مستوى الدعم', color: 'text-purple-500', bg: 'bg-purple-50', value: `Lv. ${supportLevel}`, progress: supportProgress },
@@ -335,6 +337,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
 
       {/* Mall Modal */}
       <MallModal isOpen={showMall} onClose={() => setShowMall(false)} user={user} />
+      <MallModal isOpen={showVipCenter} onClose={() => setShowVipCenter(false)} user={user} onlyVip={true} />
     </div>
   );
 }

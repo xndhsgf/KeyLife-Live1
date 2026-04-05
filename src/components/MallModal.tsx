@@ -7,10 +7,11 @@ interface MallModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: any;
+  onlyVip?: boolean;
 }
 
-export default function MallModal({ isOpen, onClose, user }: MallModalProps) {
-  const [mallCategory, setMallCategory] = useState('mic_frame');
+export default function MallModal({ isOpen, onClose, user, onlyVip = false }: MallModalProps) {
+  const [mallCategory, setMallCategory] = useState(onlyVip ? 'vip' : 'mic_frame');
   const [storeItems, setStoreItems] = useState<any[]>([]);
   const [vipLevels, setVipLevels] = useState<any[]>([]);
   const [userData, setUserData] = useState<any>(null);
@@ -63,23 +64,25 @@ export default function MallModal({ isOpen, onClose, user }: MallModalProps) {
         </div>
 
         {/* Categories */}
-        <div className="flex overflow-x-auto hide-scrollbar p-3 gap-2 bg-black/20">
-          <button onClick={() => setMallCategory('vip')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'vip' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-            <Crown size={16} /> VIP
-          </button>
-          <button onClick={() => setMallCategory('mic_frame')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'mic_frame' ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-            <Mic size={16} /> إطارات المايك
-          </button>
-          <button onClick={() => setMallCategory('entrance')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'entrance' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-            <ImageIcon size={16} /> دخوليات
-          </button>
-          <button onClick={() => setMallCategory('chat_bubble')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'chat_bubble' ? 'bg-pink-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-            <MessageCircle size={16} /> فقاعات الدردشة
-          </button>
-          <button onClick={() => setMallCategory('room_background')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'room_background' ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
-            <ImageIcon size={16} /> خلفيات الغرف
-          </button>
-        </div>
+        {!onlyVip && (
+          <div className="flex overflow-x-auto hide-scrollbar p-3 gap-2 bg-black/20">
+            <button onClick={() => setMallCategory('vip')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'vip' ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+              <Crown size={16} /> VIP
+            </button>
+            <button onClick={() => setMallCategory('mic_frame')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'mic_frame' ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+              <Mic size={16} /> إطارات المايك
+            </button>
+            <button onClick={() => setMallCategory('entrance')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'entrance' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+              <ImageIcon size={16} /> دخوليات
+            </button>
+            <button onClick={() => setMallCategory('chat_bubble')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'chat_bubble' ? 'bg-pink-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+              <MessageCircle size={16} /> فقاعات الدردشة
+            </button>
+            <button onClick={() => setMallCategory('room_background')} className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mallCategory === 'room_background' ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+              <ImageIcon size={16} /> خلفيات الغرف
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
@@ -129,6 +132,16 @@ export default function MallModal({ isOpen, onClose, user }: MallModalProps) {
                                     isFullScreen: true,
                                     duration: 4
                                   } : userSnap.data().equippedEntrance
+                                });
+                                
+                                const purchasedRef = doc(collection(db, 'users', user.uid, 'purchased_items'));
+                                transaction.set(purchasedRef, {
+                                  type: 'vip',
+                                  name: level.name,
+                                  levelNumber: level.levelNumber,
+                                  frameUrl: level.frameUrl || null,
+                                  entranceEffectUrl: level.entranceEffectUrl || null,
+                                  purchasedAt: Date.now()
                                 });
                               });
                               setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });

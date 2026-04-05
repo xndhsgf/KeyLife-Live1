@@ -121,7 +121,8 @@ export default function LiveRoom({
           entrance: data.equippedEntrance,
           chat_bubble: data.equippedBubble,
           text_color: data.equippedTextColor,
-          room_background: data.equippedBackground
+          room_background: data.equippedBackground,
+          vip: data.isVIP ? data.vipLevel : null
         });
       }
     });
@@ -1559,6 +1560,7 @@ export default function LiveRoom({
                       
                       const isEquipped = (() => {
                         const equipped = equippedItems[item.type];
+                        if (item.type === 'vip') return equippedItems.vip === item.levelNumber;
                         if (!equipped) return false;
                         if (item.type === 'entrance') return equipped.imageUrl === item.imageUrl;
                         return equipped === item.imageUrl;
@@ -1574,6 +1576,10 @@ export default function LiveRoom({
                           <div className="w-16 h-16 bg-gray-900 rounded-full mb-3 relative flex items-center justify-center overflow-hidden">
                             {item.type === 'text_color' ? (
                               <div className="w-full h-full" style={{ backgroundColor: item.imageUrl }}></div>
+                            ) : item.type === 'vip' ? (
+                              <div className="w-full h-full rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                                V{item.levelNumber}
+                              </div>
                             ) : (
                               <img src={item.imageUrl || undefined} className={`absolute inset-0 w-full h-full object-cover z-10 pointer-events-none ${item.type === 'mic_frame' ? 'scale-125' : ''}`} />
                             )}
@@ -1599,6 +1605,10 @@ export default function LiveRoom({
                                   if (item.type === 'chat_bubble') updateData.equippedBubble = item.imageUrl;
                                   if (item.type === 'text_color') updateData.equippedTextColor = item.imageUrl;
                                   if (item.type === 'room_background') updateData.equippedBackground = item.imageUrl;
+                                  if (item.type === 'vip') {
+                                    updateData.vipLevel = item.levelNumber;
+                                    updateData.isVIP = true;
+                                  }
 
                                   await updateDoc(doc(db, 'users', user.uid), updateData);
                                   
@@ -1628,6 +1638,10 @@ export default function LiveRoom({
                                     if (item.type === 'chat_bubble') updateData.equippedBubble = null;
                                     if (item.type === 'text_color') updateData.equippedTextColor = null;
                                     if (item.type === 'room_background') updateData.equippedBackground = null;
+                                    if (item.type === 'vip') {
+                                      updateData.vipLevel = 0;
+                                      updateData.isVIP = false;
+                                    }
 
                                     await updateDoc(doc(db, 'users', user.uid), updateData);
                                     
@@ -1698,6 +1712,16 @@ export default function LiveRoom({
                                           isFullScreen: true,
                                           duration: 4
                                         } : userSnap.data().equippedEntrance
+                                      });
+                                      
+                                      const purchasedRef = doc(collection(db, 'users', user.uid, 'purchased_items'));
+                                      transaction.set(purchasedRef, {
+                                        type: 'vip',
+                                        name: level.name,
+                                        levelNumber: level.levelNumber,
+                                        frameUrl: level.frameUrl || null,
+                                        entranceEffectUrl: level.entranceEffectUrl || null,
+                                        purchasedAt: Date.now()
                                       });
                                     });
                                     setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
