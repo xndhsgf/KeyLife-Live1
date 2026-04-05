@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc, increment, deleteDoc, where, getDocs, writeBatch } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { calculateLevel } from '../lib/levels';
+import { calculateLevel, getLevelColor } from '../lib/levels';
 import BackgroundSelector from './BackgroundSelector';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
@@ -57,6 +57,17 @@ export default function LiveRoom({
   const [userData, setUserData] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [showEmotePicker, setShowEmotePicker] = useState(false);
+  const [activeEmotes, setActiveEmotes] = useState<{[userId: string]: string}>({});
+
+  const EMOTES = [
+    { id: 'heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2764_fe0f/512.gif' },
+    { id: 'laugh', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif' },
+    { id: 'cry', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif' },
+    { id: 'fire', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif' },
+    { id: 'clap', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif' },
+    { id: 'party', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif' },
+  ];
   
   const [activeGiftEvents, setActiveGiftEvents] = useState<any[]>([]);
   const [activeJackpotEvent, setActiveJackpotEvent] = useState<any>(null);
@@ -216,6 +227,15 @@ export default function LiveRoom({
               setShowEntrance({ ...event.entranceData, userName: event.userName });
               const duration = event.entranceData.duration ? event.entranceData.duration * 1000 : 4000;
               setTimeout(() => setShowEntrance(null), duration);
+            } else if (event.type === 'emote') {
+              setActiveEmotes(prev => ({ ...prev, [event.userId]: event.emoteUrl }));
+              setTimeout(() => {
+                setActiveEmotes(prev => {
+                  const next = { ...prev };
+                  delete next[event.userId];
+                  return next;
+                });
+              }, 3000);
             }
           }
         }
@@ -798,6 +818,21 @@ export default function LiveRoom({
                       {mic.userId ? (
                         <>
                           <img src={mic.userAvatar || undefined} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                          
+                          {/* Active Emote Overlay */}
+                          <AnimatePresence>
+                            {activeEmotes[mic.userId] && (
+                              <motion.div
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1.5, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
+                              >
+                                <img src={activeEmotes[mic.userId]} alt="emote" className="w-12 h-12 object-contain drop-shadow-xl" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
                           {mic.userId && mic.cpPartnerId && mics.some(m => m.userId === mic.cpPartnerId) && (
                             <div className="absolute -top-1 -right-1 z-30 animate-bounce">
                               <Heart size={16} className="text-pink-500 fill-pink-500 drop-shadow-[0_0_5px_rgba(236,72,153,0.8)]" />
@@ -920,7 +955,13 @@ export default function LiveRoom({
                   >
                     {msg.userName}:
                   </span>
-                  <span className="text-xs" style={{ color: msg.userTextColor || 'white' }}>{msg.text}</span>
+                  <span className="text-xs" style={{ color: msg.userTextColor || 'white' }}>
+                    {msg.type === 'emote' ? (
+                      <img src={msg.emoteUrl} alt="emote" className="inline-block w-8 h-8 mr-1" />
+                    ) : (
+                      msg.text
+                    )}
+                  </span>
                 </div>
               </div>
             ))}
@@ -970,10 +1011,62 @@ export default function LiveRoom({
               </button>
             </form>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 relative">
               <button className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
                 <Mic size={20} />
               </button>
+              <button 
+                onClick={() => setShowEmotePicker(!showEmotePicker)}
+                className={`p-2.5 rounded-full backdrop-blur-md transition ${showEmotePicker ? 'bg-purple-600 text-white' : 'bg-black/40 hover:bg-black/60'}`}
+              >
+                <Smile size={20} />
+              </button>
+              
+              {/* Emote Picker */}
+              <AnimatePresence>
+                {showEmotePicker && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                    className="absolute bottom-full mb-4 right-0 bg-gray-900/90 backdrop-blur-xl border border-gray-700 rounded-2xl p-3 shadow-2xl z-50 w-64"
+                  >
+                    <div className="grid grid-cols-3 gap-2">
+                      {EMOTES.map(emote => (
+                        <button
+                          key={emote.id}
+                          onClick={async () => {
+                            setShowEmotePicker(false);
+                            if (!user) return;
+                            
+                            // Send chat message
+                            await addDoc(collection(db, 'rooms', roomId, 'room_chat'), {
+                              userId: user.uid,
+                              userName: user.displayName,
+                              userAvatar: user.photoURL,
+                              type: 'emote',
+                              emoteUrl: emote.url,
+                              timestamp: Date.now()
+                            });
+                            
+                            // Send event for mic animation
+                            await addDoc(collection(db, 'rooms', roomId, 'room_events'), {
+                              type: 'emote',
+                              userId: user.uid,
+                              emoteUrl: emote.url,
+                              timestamp: Date.now()
+                            });
+                          }}
+                          className="bg-gray-800 hover:bg-gray-700 rounded-xl p-2 flex items-center justify-center transition"
+                        >
+                          <img src={emote.url} alt={emote.id} className="w-10 h-10 object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {user && room.speakers?.some((s: any) => s.uid === user.uid) && (
                 <button 
                   onClick={() => setShowCpChat(true)}
@@ -1248,37 +1341,39 @@ export default function LiveRoom({
               <div className="grid grid-cols-4 gap-y-6 gap-x-4">
                 {[
                   { icon: <Gamepad2 />, label: 'الألعاب', color: 'text-purple-400', action: () => { setShowAdminTools(false); setShowGameCenter(true); } },
-                { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
+                  { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
                   { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
                   { icon: <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
-                  { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
-                  { icon: <Music />, label: 'موسيقى', color: 'text-green-400' },
-                  { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
-                  { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
-                  { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
-                    setShowAdminTools(false);
-                    setConfirmModal({
-                      show: true,
-                      title: 'تصفير الكاريزما',
-                      message: 'هل أنت متأكد من تصفير كاريزما الغرفة والمايكات؟ لا يمكن التراجع عن هذا الإجراء.',
-                      onConfirm: async () => {
-                        await updateDoc(doc(db, 'rooms', roomId), { charisma: 0 });
-                        const micsSnap = await getDocs(collection(db, 'rooms', roomId, 'mics'));
-                        const batch = writeBatch(db);
-                        micsSnap.docs.forEach(d => {
-                          batch.update(d.ref, { charisma: 0 });
-                        });
-                        await batch.commit();
-                        setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
-                      }
-                    });
-                  }},
-                  { icon: <Edit3 />, label: 'تغيير الاسم', color: 'text-blue-400', action: () => {
-                    setShowAdminTools(false);
-                    setNewRoomName(room?.name || '');
-                    setShowEditRoomName(true);
-                  }},
+                  ...(room.hostId === user?.uid || userData?.role === 'admin' ? [
+                    { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
+                    { icon: <Music />, label: 'موسيقى', color: 'text-green-400' },
+                    { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
+                    { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
+                    { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
+                      setShowAdminTools(false);
+                      setConfirmModal({
+                        show: true,
+                        title: 'تصفير الكاريزما',
+                        message: 'هل أنت متأكد من تصفير كاريزما الغرفة والمايكات؟ لا يمكن التراجع عن هذا الإجراء.',
+                        onConfirm: async () => {
+                          await updateDoc(doc(db, 'rooms', roomId), { charisma: 0 });
+                          const micsSnap = await getDocs(collection(db, 'rooms', roomId, 'mics'));
+                          const batch = writeBatch(db);
+                          micsSnap.docs.forEach(d => {
+                            batch.update(d.ref, { charisma: 0 });
+                          });
+                          await batch.commit();
+                          setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                        }
+                      });
+                    }},
+                    { icon: <Edit3 />, label: 'تغيير الاسم', color: 'text-blue-400', action: () => {
+                      setShowAdminTools(false);
+                      setNewRoomName(room?.name || '');
+                      setShowEditRoomName(true);
+                    }}
+                  ] : [])
                 ].map((tool, idx) => (
                   <div key={idx} onClick={tool.action} className="flex flex-col items-center gap-2 cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center ${tool.color}`}>
@@ -1821,8 +1916,14 @@ export default function LiveRoom({
         {/* User Profile Modal */}
         {selectedProfile && (
           <div className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-end justify-center" onClick={() => setSelectedProfile(null)}>
-            <div className="bg-gray-900 w-full rounded-t-3xl p-6 border-t border-gray-800 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setSelectedProfile(null)} className="absolute top-4 left-4 text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full"><X size={20} /></button>
+            <div className="bg-gray-900/80 backdrop-blur-xl w-full rounded-t-3xl p-6 border-t border-white/10 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]" onClick={e => e.stopPropagation()}>
+              <div className="absolute top-4 left-4 flex gap-2">
+                <button onClick={() => setSelectedProfile(null)} className="text-gray-400 hover:text-white bg-black/40 p-2 rounded-full backdrop-blur-md"><X size={20} /></button>
+              </div>
+              <div className="absolute top-4 right-4 flex gap-2">
+                <button onClick={() => { setSelectedProfile(null); setShowMallModal(true); }} className="text-pink-400 hover:text-pink-300 bg-pink-500/10 p-2 rounded-full backdrop-blur-md border border-pink-500/20"><ShoppingBag size={20} /></button>
+                <button className="text-blue-400 hover:text-blue-300 bg-blue-500/10 p-2 rounded-full backdrop-blur-md border border-blue-500/20"><User size={20} /></button>
+              </div>
               
               <div className="flex flex-col items-center -mt-12 mb-4">
                 <div className="relative w-24 h-24 flex items-center justify-center">
@@ -1844,13 +1945,13 @@ export default function LiveRoom({
               </div>
               
               <div className="flex justify-center gap-4 mb-6">
-                <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
+                <div className={`bg-gray-800/50 border px-6 py-2.5 rounded-2xl text-center flex-1 ${getLevelColor(calculateLevel(selectedProfile.totalSupport || 0)).border}`}>
                   <p className="text-[10px] text-gray-400 mb-1">مستوى الدعم</p>
-                  <p className="text-yellow-400 font-bold flex items-center gap-1 justify-center"><Crown size={14}/> Lv.{calculateLevel(selectedProfile.totalSupport || 0)}</p>
+                  <p className={`font-bold flex items-center gap-1 justify-center ${getLevelColor(calculateLevel(selectedProfile.totalSupport || 0)).text}`}><Crown size={14}/> Lv.{calculateLevel(selectedProfile.totalSupport || 0)}</p>
                 </div>
-                <div className="bg-gray-800/50 border border-gray-700 px-6 py-2.5 rounded-2xl text-center flex-1">
+                <div className={`bg-gray-800/50 border px-6 py-2.5 rounded-2xl text-center flex-1 ${getLevelColor(calculateLevel(selectedProfile.totalSpent || 0)).border}`}>
                   <p className="text-[10px] text-gray-400 mb-1">مستوى الشحن</p>
-                  <p className="text-blue-400 font-bold flex items-center gap-1 justify-center"><Diamond size={14}/> Lv.{calculateLevel(selectedProfile.totalSpent || 0)}</p>
+                  <p className={`font-bold flex items-center gap-1 justify-center ${getLevelColor(calculateLevel(selectedProfile.totalSpent || 0)).text}`}><Diamond size={14}/> Lv.{calculateLevel(selectedProfile.totalSpent || 0)}</p>
                 </div>
               </div>
 
@@ -1927,9 +2028,34 @@ export default function LiveRoom({
               </div>
 
               {/* Room Admin Controls */}
-              {room.hostId === user?.uid && selectedProfile.uid !== user?.uid && (
+              {(room.hostId === user?.uid || userData?.role === 'admin') && selectedProfile.uid !== user?.uid && (
                 <>
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-800 pt-4">
+                    {mics.some(m => m.userId === selectedProfile.uid) && (
+                      <button 
+                        onClick={async () => {
+                          if (!confirm('هل أنت متأكد من إنزال هذا المستخدم من المايك؟')) return;
+                          try {
+                            const micToClear = mics.find(m => m.userId === selectedProfile.uid);
+                            if (micToClear) {
+                              await updateDoc(doc(db, 'rooms', roomId, 'mics', micToClear.id), { 
+                                userId: null, 
+                                userAvatar: null, 
+                                userName: null, 
+                                userMicFrame: null, 
+                                userMicIcon: null 
+                              });
+                              setSelectedProfile(null);
+                            }
+                          } catch (err) {
+                            console.error('Error removing from mic:', err);
+                          }
+                        }}
+                        className="flex-1 bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30 transition py-2.5 rounded-xl font-bold border border-yellow-500/30 flex items-center justify-center gap-2 text-xs"
+                      >
+                        إنزال من المايك
+                      </button>
+                    )}
                     <button 
                       onClick={async () => {
                         if (!confirm('هل أنت متأكد من طرد هذا المستخدم من الغرفة؟')) return;
@@ -1940,6 +2066,19 @@ export default function LiveRoom({
                             audience: newAudience,
                             speakers: newSpeakers
                           });
+                          
+                          // Also remove from mic if they are on one
+                          const micToClear = mics.find(m => m.userId === selectedProfile.uid);
+                          if (micToClear) {
+                            await updateDoc(doc(db, 'rooms', roomId, 'mics', micToClear.id), { 
+                              userId: null, 
+                              userAvatar: null, 
+                              userName: null, 
+                              userMicFrame: null, 
+                              userMicIcon: null 
+                            });
+                          }
+                          
                           setSelectedProfile(null);
                         } catch (error) {
                           console.error('Error kicking user:', error);

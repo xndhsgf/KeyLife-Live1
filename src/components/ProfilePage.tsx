@@ -3,7 +3,7 @@ import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, A
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { calculateLevel, getProgressToNextLevel } from '../lib/levels';
+import { calculateLevel, getProgressToNextLevel, getLevelColor } from '../lib/levels';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
 import MallModal from './MallModal';
@@ -142,7 +142,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
             {userData?.equippedMicFrame && !isEditing && (
               <img src={userData.equippedMicFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="Avatar Frame" />
             )}
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-white z-20">
+            <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gradient-to-r ${getLevelColor(Math.max(chargingLevel, supportLevel)).from} ${getLevelColor(Math.max(chargingLevel, supportLevel)).to} ${getLevelColor(Math.max(chargingLevel, supportLevel)).text} text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap border border-white z-20`}>
               Lv. {Math.max(chargingLevel, supportLevel)}
             </div>
           </div>
