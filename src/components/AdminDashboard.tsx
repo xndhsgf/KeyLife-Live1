@@ -73,7 +73,6 @@ export default function AdminDashboard() {
       case 'reset': return <AdminResetTab />;
       case 'users': return <UsersTab />;
       case 'active_rooms': return <ActiveRoomsTab />;
-      case 'logs': return <LogsTab />;
       default: return null;
     }
   };
@@ -110,7 +109,6 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
           <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
           <TabCard onClick={() => setActiveTab('active_rooms')} icon={<Radio size={24} />} label="الغرف النشطة" />
-          <TabCard onClick={() => setActiveTab('logs')} icon={<List size={24} />} label="سجل العمليات" />
         </div>
       </div>
 
@@ -1875,68 +1873,6 @@ function MyAdminAccountTab() {
           </button>
         </div>
         <p className="text-[10px] text-gray-500 mt-2">ملاحظة: يمكنك إضافة أي كمية من الألماس لحسابك كمسؤول.</p>
-      </div>
-    </div>
-  );
-}
-
-function LogsTab() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const q = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'));
-        const snapshot = await getDocs(q);
-        setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (error) {
-        console.error("Error fetching logs", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLogs();
-  }, []);
-
-  if (loading) return <div>جاري تحميل السجل...</div>;
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-4 border-b border-gray-100">
-        <h2 className="text-lg font-bold text-gray-800">سجل العمليات</h2>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead className="bg-gray-50 text-gray-600 text-xs">
-            <tr>
-              <th className="px-4 py-3">النوع</th>
-              <th className="px-4 py-3">المستخدم</th>
-              <th className="px-4 py-3">الكمية</th>
-              <th className="px-4 py-3">التاريخ</th>
-              <th className="px-4 py-3">الحالة</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {logs.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">لا توجد عمليات مسجلة</td></tr>
-            ) : (
-              logs.map(log => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-blue-600">{log.type === 'recharge' ? 'شحن ألماس' : log.type}</td>
-                  <td className="px-4 py-3 text-xs font-mono" dir="ltr">{log.userId}</td>
-                  <td className="px-4 py-3 font-bold text-gray-800">{log.amount}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500" dir="ltr">{new Date(log.timestamp).toLocaleString('ar-EG')}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {log.status === 'success' ? 'ناجح' : 'فشل'}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );

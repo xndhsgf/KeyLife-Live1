@@ -570,15 +570,17 @@ export default function LiveRoom({
     }
   };
 
+  const displayBackground = roomBackground || globalSettings?.defaultRoomBackground;
+
   return (
     <div className="fixed inset-0 z-50 bg-gray-950 text-white flex justify-center font-sans h-[100dvh]" dir="rtl">
       <div className="w-full max-w-md h-[100dvh] relative overflow-hidden">
         {/* Background Layer */}
         <div className="absolute inset-0 z-0">
-          {roomBackground ? (
-            roomBackground.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+          {displayBackground ? (
+            displayBackground.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
               <video 
-                src={roomBackground || undefined} 
+                src={displayBackground} 
                 autoPlay 
                 loop 
                 muted 
@@ -586,7 +588,7 @@ export default function LiveRoom({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <img src={roomBackground || undefined} className="w-full h-full object-cover" alt="Background" />
+              <img src={displayBackground} className="w-full h-full object-cover" alt="Background" />
             )
           ) : (
             <div className="w-full h-full bg-gradient-to-b from-indigo-950 via-purple-950 to-black"></div>
