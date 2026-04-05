@@ -59,16 +59,8 @@ export default function LiveRoom({
   const [chatInput, setChatInput] = useState('');
   const [showEmotePicker, setShowEmotePicker] = useState(false);
   const [activeEmotes, setActiveEmotes] = useState<{[userId: string]: string}>({});
+  const [emotes, setEmotes] = useState<any[]>([]);
 
-  const EMOTES = [
-    { id: 'heart', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/2764_fe0f/512.gif' },
-    { id: 'laugh', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f602/512.gif' },
-    { id: 'cry', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f62d/512.gif' },
-    { id: 'fire', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.gif' },
-    { id: 'clap', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f44f/512.gif' },
-    { id: 'party', url: 'https://fonts.gstatic.com/s/e/notoemoji/latest/1f389/512.gif' },
-  ];
-  
   const [activeGiftEvents, setActiveGiftEvents] = useState<any[]>([]);
   const [activeJackpotEvent, setActiveJackpotEvent] = useState<any>(null);
   const [selectedReceivers, setSelectedReceivers] = useState<string[]>([]);
@@ -187,6 +179,10 @@ export default function LiveRoom({
       setStoreItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubEmotes = onSnapshot(collection(db, 'emotes'), (snapshot) => {
+      setEmotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const unsubPurchased = onSnapshot(collection(db, 'users', user.uid, 'purchased_items'), (snapshot) => {
       setPurchasedItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -247,7 +243,7 @@ export default function LiveRoom({
       setCpMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubEmotes(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
   }, [user]);
 
   // Handle entrance effect on join
@@ -499,13 +495,13 @@ export default function LiveRoom({
             }
           }
 
-          batch.update(receiverRef, { diamonds: increment(gift.value) });
+          batch.set(receiverRef, { diamonds: increment(gift.value) }, { merge: true });
 
           const targetMic = mics.find(m => m.userId === receiverId);
           if (targetMic) {
-            batch.update(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
+            batch.set(doc(db, 'rooms', roomId, 'mics', targetMic.id), {
               charisma: increment(gift.value)
-            });
+            }, { merge: true });
           }
 
           batch.set(doc(collection(db, 'transactions')), {
@@ -537,15 +533,15 @@ export default function LiveRoom({
           });
         }
 
-        batch.update(senderRef, { 
+        batch.set(senderRef, { 
           diamonds: increment(-totalCost + totalWinAmount),
           dailySupport: increment(totalCost),
           totalSupport: increment(totalCost)
-        });
+        }, { merge: true });
 
-        batch.update(doc(db, 'rooms', roomId), {
+        batch.set(doc(db, 'rooms', roomId), {
           charisma: increment(totalCost)
-        });
+        }, { merge: true });
         
         await batch.commit();
       } catch (error: any) {
@@ -1032,7 +1028,7 @@ export default function LiveRoom({
                     className="absolute bottom-full mb-4 right-0 bg-gray-900/90 backdrop-blur-xl border border-gray-700 rounded-2xl p-3 shadow-2xl z-50 w-64"
                   >
                     <div className="grid grid-cols-3 gap-2">
-                      {EMOTES.map(emote => (
+                      {emotes.map(emote => (
                         <button
                           key={emote.id}
                           onClick={async () => {
@@ -1062,6 +1058,9 @@ export default function LiveRoom({
                           <img src={emote.url} alt={emote.id} className="w-10 h-10 object-contain" />
                         </button>
                       ))}
+                      {emotes.length === 0 && (
+                        <div className="col-span-3 text-center text-gray-500 text-xs py-2">لا توجد إيموشنات</div>
+                      )}
                     </div>
                   </motion.div>
                 )}

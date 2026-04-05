@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown, Smile, FileText } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -67,6 +67,7 @@ export default function AdminDashboard() {
       case 'banners': return <BannersTab />;
       case 'cp': return <CPTab />;
       case 'backgrounds': return <RoomBackgroundsTab />;
+      case 'emotes': return <EmotesTab />;
       case 'myAccount': return <MyAdminAccountTab />;
       case 'reset': return <AdminResetTab />;
       case 'users': return <UsersTab />;
@@ -102,6 +103,7 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('banners')} icon={<ImageIcon size={24} />} label="البنرات" />
           <TabCard onClick={() => setActiveTab('cp')} icon={<Users size={24} />} label="إعدادات الـ CP" />
           <TabCard onClick={() => setActiveTab('backgrounds')} icon={<ImageIcon size={24} />} label="خلفيات الغرف" />
+          <TabCard onClick={() => setActiveTab('emotes')} icon={<Smile size={24} />} label="الإيموشنات" />
           <TabCard onClick={() => setActiveTab('myAccount')} icon={<Users size={24} />} label="حسابي (المدير)" />
           <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
           <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
@@ -2580,6 +2582,114 @@ function ManagerTab() {
             </>
           )}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function EmotesTab() {
+  const [emotes, setEmotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newEmote, setNewEmote] = useState({ id: '', url: '' });
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    const fetchEmotes = async () => {
+      const q = query(collection(db, 'emotes'));
+      const snapshot = await getDocs(q);
+      setEmotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    };
+    fetchEmotes();
+  }, []);
+
+  const handleAddEmote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmote.id || !newEmote.url) return alert('الرجاء إدخال المعرف والرابط');
+    
+    setIsAdding(true);
+    try {
+      await setDoc(doc(db, 'emotes', newEmote.id), {
+        url: newEmote.url,
+        createdAt: new Date().toISOString()
+      });
+      setEmotes([...emotes, { id: newEmote.id, url: newEmote.url }]);
+      setNewEmote({ id: '', url: '' });
+      alert('تم إضافة الإيموشن بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleDeleteEmote = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الإيموشن؟')) return;
+    try {
+      await deleteDoc(doc(db, 'emotes', id));
+      setEmotes(emotes.filter(e => e.id !== id));
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">جاري التحميل...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">إضافة إيموشن جديد</h2>
+        <form onSubmit={handleAddEmote} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">معرف الإيموشن (مثل: heart, laugh)</label>
+            <input 
+              type="text" 
+              value={newEmote.id}
+              onChange={e => setNewEmote({...newEmote, id: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded-lg"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط الإيموشن (صورة أو GIF)</label>
+            <input 
+              type="url" 
+              value={newEmote.url}
+              onChange={e => setNewEmote({...newEmote, url: e.target.value})}
+              className="w-full p-2 border border-gray-300 rounded-lg text-left"
+              dir="ltr"
+              required
+            />
+          </div>
+          <button 
+            type="submit" 
+            disabled={isAdding}
+            className="w-full bg-purple-600 text-white font-bold py-3 rounded-xl hover:bg-purple-700 transition disabled:opacity-50"
+          >
+            {isAdding ? 'جاري الإضافة...' : 'إضافة الإيموشن'}
+          </button>
+        </form>
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">الإيموشنات الحالية</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+          {emotes.map(emote => (
+            <div key={emote.id} className="border border-gray-200 rounded-xl p-4 flex flex-col items-center relative group">
+              <img src={emote.url} alt={emote.id} className="w-12 h-12 object-contain mb-2" />
+              <span className="text-xs text-gray-500">{emote.id}</span>
+              <button 
+                onClick={() => handleDeleteEmote(emote.id)}
+                className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition shadow-lg"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          {emotes.length === 0 && (
+            <div className="col-span-full text-center text-gray-500 py-8">لا توجد إيموشنات مضافة بعد</div>
+          )}
+        </div>
       </div>
     </div>
   );

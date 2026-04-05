@@ -332,6 +332,9 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
           agentBonus={userData.agentBonus || 0}
         />
       )}
+
+      {/* Mall Modal */}
+      <MallModal isOpen={showMall} onClose={() => setShowMall(false)} user={user} />
     </div>
   );
 }
