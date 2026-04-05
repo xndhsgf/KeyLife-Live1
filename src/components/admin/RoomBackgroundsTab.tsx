@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, addDoc, getDocs, doc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, deleteDoc, query, orderBy, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Plus, Trash2, Image as ImageIcon, Link as LinkIcon, Upload, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, Link as LinkIcon, Upload, Loader2, Save } from 'lucide-react';
 
 export default function RoomBackgroundsTab() {
   const [backgrounds, setBackgrounds] = useState<any[]>([]);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [defaultBgUrl, setDefaultBgUrl] = useState('');
+  const [isSavingDefault, setIsSavingDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -17,8 +19,32 @@ export default function RoomBackgroundsTab() {
     const unsub = onSnapshot(q, (snapshot) => {
       setBackgrounds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => unsub();
+    
+    const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (doc) => {
+      if (doc.exists()) {
+        setDefaultBgUrl(doc.data().defaultRoomBackground || '');
+      }
+    });
+    
+    return () => {
+      unsub();
+      unsubSettings();
+    };
   }, []);
+
+  const handleSaveDefault = async () => {
+    setIsSavingDefault(true);
+    try {
+      await setDoc(doc(db, 'settings', 'general'), {
+        defaultRoomBackground: defaultBgUrl
+      }, { merge: true });
+      alert('تم حفظ الخلفية الافتراضية بنجاح');
+    } catch (error: any) {
+      alert('خطأ في الحفظ: ' + error.message);
+    } finally {
+      setIsSavingDefault(false);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +95,46 @@ export default function RoomBackgroundsTab() {
 
   return (
     <div className="space-y-6">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
+          <ImageIcon className="text-purple-600" size={20} />
+          الخلفية الافتراضية للغرف
+        </h2>
+        <div className="flex gap-4 items-end">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">رابط الخلفية الافتراضية (تظهر في جميع الغرف تلقائياً)</label>
+            <div className="relative">
+              <LinkIcon className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={defaultBgUrl}
+                onChange={(e) => setDefaultBgUrl(e.target.value)}
+                className="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
+                placeholder="https://example.com/default-bg.jpg"
+                dir="ltr"
+              />
+            </div>
+          </div>
+          <button
+            onClick={handleSaveDefault}
+            disabled={isSavingDefault}
+            className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSavingDefault ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            حفظ
+          </button>
+        </div>
+        {defaultBgUrl && (
+          <div className="mt-4 w-full max-w-[200px] aspect-video rounded-lg overflow-hidden border border-gray-200 bg-black">
+            {defaultBgUrl.toLowerCase().match(/\.(mp4|webm|ogg)(\?.*)?$/) ? (
+              <video src={defaultBgUrl} className="w-full h-full object-cover" autoPlay muted loop />
+            ) : (
+              <img src={defaultBgUrl} className="w-full h-full object-cover" />
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
           <Plus className="text-purple-600" size={20} />

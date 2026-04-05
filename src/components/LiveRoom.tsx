@@ -8,6 +8,7 @@ import { calculateLevel, getLevelColor } from '../lib/levels';
 import BackgroundSelector from './BackgroundSelector';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
+import PrivateChat from './PrivateChat';
 
 export default function LiveRoom({ 
   roomId, 
@@ -78,6 +79,8 @@ export default function LiveRoom({
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverIds: string[], timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
   const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string, idIcon?: string}>({});
+  const [activePrivateChat, setActivePrivateChat] = useState<{id: string, name: string, photo: string} | null>(null);
+  const [globalSettings, setGlobalSettings] = useState<any>({});
   const [confirmModal, setConfirmModal] = useState<{show: boolean, title: string, message: string, onConfirm: () => void}>({
     show: false,
     title: '',
@@ -153,6 +156,12 @@ export default function LiveRoom({
       }
     });
 
+    const unsubGlobalSettings = onSnapshot(doc(db, 'settings', 'general'), (doc) => {
+      if (doc.exists()) {
+        setGlobalSettings(doc.data());
+      }
+    });
+
     const unsubMics = onSnapshot(collection(db, 'rooms', roomId, 'mics'), async (snapshot) => {
       if (snapshot.empty) {
         for (let i = 0; i < 12; i++) {
@@ -191,12 +200,9 @@ export default function LiveRoom({
     const qChat = query(collection(db, 'rooms', roomId, 'room_chat'), orderBy('timestamp', 'desc'), limit(30));
     const unsubChat = onSnapshot(qChat, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any })).reverse();
-      // Filter out gift messages that were sent before the user joined the room
+      // Filter out all messages that were sent before the user joined the room
       const filteredMessages = messages.filter(msg => {
-        if (msg.isSystemGift) {
-          return msg.timestamp >= mountTime.current;
-        }
-        return true;
+        return msg.timestamp >= mountTime.current;
       });
       setChatMessages(filteredMessages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
@@ -244,7 +250,7 @@ export default function LiveRoom({
       setCpMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubEmotes(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubGlobalSettings(); unsubRoom(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubEmotes(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
   }, [user]);
 
   // Handle entrance effect on join
@@ -2045,6 +2051,19 @@ export default function LiveRoom({
                 }} className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-pink-500/30">
                   إرسال هدية
                 </button>
+                <button 
+                  onClick={() => {
+                    setActivePrivateChat({
+                      id: selectedProfile.uid,
+                      name: selectedProfile.name,
+                      photo: selectedProfile.avatar
+                    });
+                    setSelectedProfile(null);
+                  }}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 transition text-white py-3.5 rounded-xl font-bold border border-purple-500"
+                >
+                  رسالة
+                </button>
                 <button className="flex-1 bg-gray-800 hover:bg-gray-700 transition text-white py-3.5 rounded-xl font-bold border border-gray-700">
                   متابعة
                 </button>
@@ -2183,6 +2202,17 @@ export default function LiveRoom({
                 </>
               )}
             </div>
+          </div>
+        )}
+        {/* Private Chat */}
+        {activePrivateChat && (
+          <div className="absolute inset-0 z-[200]">
+            <PrivateChat
+              targetUserId={activePrivateChat.id}
+              targetUserName={activePrivateChat.name}
+              targetUserPhoto={activePrivateChat.photo}
+              onClose={() => setActivePrivateChat(null)}
+            />
           </div>
         )}
       </div>

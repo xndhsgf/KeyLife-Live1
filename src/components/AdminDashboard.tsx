@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown, Smile, FileText } from 'lucide-react';
+import { Settings, Gift, Diamond, Mic, List, Plus, Trash2, Edit2, Check, X, ShieldAlert, Gamepad2, Image as ImageIcon, TrendingUp, ShoppingBag, Layout, Users, RefreshCw, Upload, Loader2, Star, Briefcase, Crown, Smile, FileText, Radio } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, getDoc, setDoc, onSnapshot, DocumentSnapshot, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -10,6 +10,7 @@ import RoomBackgroundsTab from './admin/RoomBackgroundsTab';
 import AdminResetTab from './admin/AdminResetTab';
 import CPTab from './admin/CPTab';
 import GamesTab from './admin/GamesTab';
+import ActiveRoomsTab from './admin/ActiveRoomsTab';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function AdminDashboard() {
       case 'myAccount': return <MyAdminAccountTab />;
       case 'reset': return <AdminResetTab />;
       case 'users': return <UsersTab />;
+      case 'active_rooms': return <ActiveRoomsTab />;
       case 'logs': return <LogsTab />;
       default: return null;
     }
@@ -107,6 +109,7 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('myAccount')} icon={<Users size={24} />} label="حسابي (المدير)" />
           <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
           <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
+          <TabCard onClick={() => setActiveTab('active_rooms')} icon={<Radio size={24} />} label="الغرف النشطة" />
           <TabCard onClick={() => setActiveTab('logs')} icon={<List size={24} />} label="سجل العمليات" />
         </div>
       </div>

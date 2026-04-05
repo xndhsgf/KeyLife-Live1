@@ -1,12 +1,43 @@
+import React, { useState, useEffect } from 'react';
 import { Receipt, Users, Phone, ShieldCheck, Bell, Search } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import PrivateChat from './PrivateChat';
 
 export default function MessagesPage() {
+  const { user } = useAuth();
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+  const [activeChat, setActiveChat] = useState<{id: string, name: string, photo: string} | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(collection(db, 'users', user.uid, 'recent_chats'), orderBy('timestamp', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setRecentChats(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => unsub();
+  }, [user]);
+
   const shortcuts = [
     { icon: <Receipt size={20} />, label: 'فاتورة', color: 'bg-blue-100 text-blue-600' },
     { icon: <Users size={20} />, label: 'متابع', color: 'bg-pink-100 text-pink-600' },
     { icon: <Phone size={20} />, label: 'الاتصالات', color: 'bg-green-100 text-green-600' },
     { icon: <ShieldCheck size={20} />, label: 'Cocco', color: 'bg-purple-100 text-purple-600' },
   ];
+
+  if (activeChat) {
+    return (
+      <PrivateChat
+        targetUserId={activeChat.id}
+        targetUserName={activeChat.name}
+        targetUserPhoto={activeChat.photo}
+        onClose={() => setActiveChat(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-white">
@@ -75,28 +106,40 @@ export default function MessagesPage() {
         </div>
 
         {/* User Chats */}
-        {[1, 2, 3, 4, 5, 6].map((chat) => (
-          <div key={chat} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition">
-            <div className="relative">
-              <img src={`https://picsum.photos/seed/chat${chat}/50/50`} alt="User" className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
-              <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${chat % 3 === 0 ? 'bg-gray-400' : 'bg-green-500'}`}></div>
-            </div>
-            <div className="flex-1">
-              <div className="flex justify-between items-center">
-                <h3 className="font-bold text-gray-800 text-sm">مستخدم {chat}</h3>
-                <span className="text-[10px] text-gray-400">{chat === 1 ? '12:30 PM' : chat === 2 ? 'Yesterday' : '12/05'}</span>
+        {recentChats.map((chat) => {
+          const targetId = chat.id;
+          const targetName = chat.userNames?.[targetId] || 'مستخدم';
+          const targetPhoto = chat.userPhotos?.[targetId] || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetId}`;
+          
+          return (
+            <div 
+              key={chat.id} 
+              onClick={() => setActiveChat({ id: targetId, name: targetName, photo: targetPhoto })}
+              className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition"
+            >
+              <div className="relative">
+                <img src={targetPhoto} alt={targetName} className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
               </div>
-              <p className="text-xs text-gray-500 truncate mt-0.5">
-                {chat % 2 === 0 ? 'شكرًا على الهدية الجميلة! 🌹' : 'متى راح تفتح بث اليوم؟'}
-              </p>
-            </div>
-            {chat === 1 && (
-              <div className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                2
+              <div className="flex-1">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-gray-800 text-sm">{targetName}</h3>
+                  <span className="text-[10px] text-gray-400">
+                    {chat.timestamp ? new Date(chat.timestamp.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 truncate mt-0.5">
+                  {chat.lastMessage}
+                </p>
               </div>
-            )}
+            </div>
+          );
+        })}
+        
+        {recentChats.length === 0 && (
+          <div className="text-center py-10 text-gray-500 text-sm">
+            لا توجد رسائل سابقة
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
