@@ -7,7 +7,8 @@ export default function GamesTab() {
   const [config, setConfig] = useState({
     fruitWinRatio: 30,
     zeusWinRatio: 20,
-    rocketMaxCrash: 5
+    rocketMaxCrash: 5,
+    luckyCatWinRatio: 30
   });
   const [loading, setLoading] = useState(false);
 
@@ -15,7 +16,13 @@ export default function GamesTab() {
     const fetchConfig = async () => {
       const docSnap = await getDoc(doc(db, 'settings', 'games_config'));
       if (docSnap.exists()) {
-        setConfig(docSnap.data() as any);
+        setConfig({
+          fruitWinRatio: 30,
+          zeusWinRatio: 20,
+          rocketMaxCrash: 5,
+          luckyCatWinRatio: 30,
+          ...docSnap.data()
+        });
       }
     };
     fetchConfig();
@@ -25,7 +32,7 @@ export default function GamesTab() {
     e.preventDefault();
     setLoading(true);
     try {
-      await setDoc(doc(db, 'settings', 'games_config'), config);
+      await setDoc(doc(db, 'settings', 'games_config'), config, { merge: true });
       alert('تم حفظ إعدادات الألعاب بنجاح');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -39,6 +46,20 @@ export default function GamesTab() {
       <h3 className="text-lg font-bold text-gray-800 mb-6">إعدادات الألعاب (نسب الربح والخسارة)</h3>
       <form onSubmit={handleSave} className="space-y-6">
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">نسبة الفوز في القط المحظوظ (%)</label>
+          <input
+            type="number"
+            required
+            min="0"
+            max="100"
+            value={config.luckyCatWinRatio}
+            onChange={e => setConfig({...config, luckyCatWinRatio: parseInt(e.target.value)})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+          <p className="text-xs text-gray-500 mt-1">مثال: 30 تعني أن اللاعب لديه فرصة 30% للفوز في كل لفة.</p>
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">نسبة الفوز في عجلة الفواكه (%)</label>
           <input
             type="number"
@@ -49,7 +70,6 @@ export default function GamesTab() {
             onChange={e => setConfig({...config, fruitWinRatio: parseInt(e.target.value)})}
             className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-500 mt-1">مثال: 30 تعني أن اللاعب لديه فرصة 30% للفوز في كل لفة.</p>
         </div>
         
         <div>
@@ -76,7 +96,6 @@ export default function GamesTab() {
             onChange={e => setConfig({...config, rocketMaxCrash: parseFloat(e.target.value)})}
             className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-500 mt-1">مثال: 5 تعني أن الصاروخ سينفجر دائماً قبل أو عند 5x.</p>
         </div>
 
         <button
