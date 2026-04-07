@@ -12,6 +12,8 @@ import CPTab from './admin/CPTab';
 import GamesTab from './admin/GamesTab';
 import ActiveRoomsTab from './admin/ActiveRoomsTab';
 
+import AppIconsTab from './admin/AppIconsTab';
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const { user } = useAuth();
@@ -56,7 +58,7 @@ export default function AdminDashboard() {
       case 'games': return <GamesTabOld />;
       case 'gameCenter': return <GamesTab />;
       case 'store': return <StoreTab />;
-      case 'icons': return <IconsBankTab />;
+      case 'icons': return <AppIconsTab />;
       case 'giftBox': return <GiftBoxTab />;
       case 'badges': return <BadgesTab />;
       case 'diamonds': return <DiamondsTab />;
@@ -379,175 +381,7 @@ function StoreTab() {
   );
 }
 
-function IconsBankTab() {
-  const [giftBoxIcon, setGiftBoxIcon] = useState('');
-  const [micIcon, setMicIcon] = useState('');
-  const [idIcon, setIdIcon] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadTarget, setUploadTarget] = useState<'giftBox' | 'mic' | 'id'>('giftBox');
 
-  useEffect(() => {
-    const fetchIcons = async () => {
-      const docRef = doc(db, 'settings', 'app_icons');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setGiftBoxIcon(data.giftBoxIcon || '');
-        setMicIcon(data.micIcon || '');
-        setIdIcon(data.idIcon || '');
-      }
-    };
-    fetchIcons();
-  }, []);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      const storageRef = ref(storage, `app_icons/${uploadTarget}_${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      
-      if (uploadTarget === 'giftBox') setGiftBoxIcon(downloadURL);
-      else if (uploadTarget === 'mic') setMicIcon(downloadURL);
-      else if (uploadTarget === 'id') setIdIcon(downloadURL);
-    } catch (error: any) {
-      alert('خطأ في الرفع: ' + error.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      await setDoc(doc(db, 'settings', 'app_icons'), {
-        giftBoxIcon,
-        micIcon,
-        idIcon,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-      alert('تم حفظ الأيقونات بنجاح!');
-    } catch (error: any) {
-      alert('خطأ في الحفظ: ' + error.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-      <h2 className="text-lg font-bold mb-4 text-gray-800">بنك الأيقونات</h2>
-      <p className="text-sm text-gray-500 mb-6">قم بإضافة روابط الصور أو رفعها من جهازك (PNG, JPG, GIF, SVG).</p>
-      
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
-
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
-          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة صندوق الهدايا</label>
-          <div className="flex gap-4 items-start">
-            <div className="flex-1 space-y-2">
-              <div className="flex gap-2">
-                <input 
-                  type="url" 
-                  value={giftBoxIcon} 
-                  onChange={e => setGiftBoxIcon(e.target.value)} 
-                  placeholder="رابط صورة أيقونة صندوق الهدايا" 
-                  className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
-                  dir="ltr" 
-                />
-                <button type="button" onClick={() => { setUploadTarget('giftBox'); fileInputRef.current?.click(); }} className="bg-white border border-gray-300 p-2 rounded-lg hover:bg-gray-50 transition shadow-sm">
-                  <Upload size={18} className="text-purple-600" />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">تظهر في أسفل الغرفة لفتح صندوق الهدايا.</p>
-            </div>
-            {giftBoxIcon && (
-              <div className="w-12 h-12 rounded-lg bg-black/80 flex items-center justify-center shrink-0">
-                <img src={giftBoxIcon || undefined} alt="Preview" className="w-8 h-8 object-contain" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
-          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة المايك (الكرسي الفارغ)</label>
-          <div className="flex gap-4 items-start">
-            <div className="flex-1 space-y-2">
-              <div className="flex gap-2">
-                <input 
-                  type="url" 
-                  value={micIcon} 
-                  onChange={e => setMicIcon(e.target.value)} 
-                  placeholder="رابط صورة أيقونة المايك" 
-                  className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
-                  dir="ltr" 
-                />
-                <button type="button" onClick={() => { setUploadTarget('mic'); fileInputRef.current?.click(); }} className="bg-white border border-gray-300 p-2 rounded-lg hover:bg-gray-50 transition shadow-sm">
-                  <Upload size={18} className="text-purple-600" />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">تظهر في الكراسي الفارغة داخل الغرفة.</p>
-            </div>
-            {micIcon && (
-              <div className="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center shrink-0 border border-white/20">
-                <img src={micIcon || undefined} alt="Preview" className="w-6 h-6 object-contain" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-4 border border-gray-100 rounded-lg bg-gray-50">
-          <label className="block text-sm font-bold text-gray-800 mb-2">أيقونة/إطار الـ ID</label>
-          <div className="flex gap-4 items-start">
-            <div className="flex-1 space-y-2">
-              <div className="flex gap-2">
-                <input 
-                  type="url" 
-                  value={idIcon} 
-                  onChange={e => setIdIcon(e.target.value)} 
-                  placeholder="رابط صورة إطار الـ ID" 
-                  className="flex-1 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none text-left" 
-                  dir="ltr" 
-                />
-                <button type="button" onClick={() => { setUploadTarget('id'); fileInputRef.current?.click(); }} className="bg-white border border-gray-300 p-2 rounded-lg hover:bg-gray-50 transition shadow-sm">
-                  <Upload size={18} className="text-purple-600" />
-                </button>
-              </div>
-              <p className="text-xs text-gray-500">تظهر كخلفية لرقم الـ ID في بروفايل المستخدم. تدعم الصور المتحركة (GIF).</p>
-            </div>
-            {idIcon && (
-              <div className="h-10 px-4 rounded-lg bg-gray-900 flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
-                <img src={idIcon || undefined} alt="Preview" className="absolute inset-0 w-full h-full object-cover" />
-                <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">ID: 1234567</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {isUploading && (
-          <div className="flex items-center gap-2 text-purple-600 text-sm font-bold bg-purple-50 p-2 rounded-lg">
-            <Loader2 size={16} className="animate-spin" />
-            جاري رفع الملف...
-          </div>
-        )}
-
-        <button 
-          type="submit" 
-          disabled={isSaving || isUploading}
-          className="w-full bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition disabled:opacity-50"
-        >
-          {isSaving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-        </button>
-      </form>
-    </div>
-  );
-}
 
 function BadgesTab() {
   const [badges, setBadges] = useState<any[]>([]);

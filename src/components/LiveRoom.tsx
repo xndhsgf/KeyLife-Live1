@@ -78,7 +78,7 @@ export default function LiveRoom({
   const [showEntrance, setShowEntrance] = useState<any>(null);
   const [lastSentGiftData, setLastSentGiftData] = useState<{gift: any, receiverIds: string[], timestamp: number} | null>(null);
   const [comboTimeout, setComboTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [appIcons, setAppIcons] = useState<{giftBoxIcon?: string, micIcon?: string, idIcon?: string}>({});
+  const [appIcons, setAppIcons] = useState<Record<string, string>>({});
   const [activePrivateChat, setActivePrivateChat] = useState<{id: string, name: string, photo: string} | null>(null);
   const [globalSettings, setGlobalSettings] = useState<any>({});
   const [confirmModal, setConfirmModal] = useState<{show: boolean, title: string, message: string, onConfirm: () => void}>({
@@ -788,7 +788,7 @@ export default function LiveRoom({
             
             <div className="flex items-center gap-2">
               <button onClick={() => setShowExitModal(true)} className="p-1.5 bg-black/40 rounded-full backdrop-blur-md hover:bg-black/60 transition">
-                <X size={18} />
+                {appIcons.closeIcon ? <img src={appIcons.closeIcon} className="w-4 h-4 object-contain" /> : <X size={18} />}
               </button>
             </div>
           </div>
@@ -855,7 +855,9 @@ export default function LiveRoom({
                       ) : (
                         <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden">
                           {mic.status === 'locked' ? (
-                            <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full"><ShieldBan size={20} className="text-red-400/50" /></div>
+                            <div className="w-full h-full bg-black/40 flex items-center justify-center rounded-full">
+                              {appIcons.micLockedIcon ? <img src={appIcons.micLockedIcon} className="w-5 h-5 object-contain opacity-50" /> : <ShieldBan size={20} className="text-red-400/50" />}
+                            </div>
                           ) : appIcons.micIcon ? (
                             <img src={appIcons.micIcon || undefined} alt="Mic" className="w-full h-full object-contain drop-shadow-md" />
                           ) : (
@@ -1012,19 +1014,19 @@ export default function LiveRoom({
                 className="flex-1 bg-black/40 border border-white/10 rounded-full px-4 py-2 text-sm text-white outline-none focus:border-purple-500 backdrop-blur-md"
               />
               <button type="submit" className="bg-purple-600 p-2 rounded-full text-white hover:bg-purple-700 transition">
-                <Send size={20} />
+                {appIcons.sendIcon ? <img src={appIcons.sendIcon} className="w-5 h-5 object-contain" /> : <Send size={20} />}
               </button>
             </form>
             
             <div className="flex items-center gap-3 relative">
               <button className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
-                <Mic size={20} />
+                {appIcons.micIcon ? <img src={appIcons.micIcon} className="w-5 h-5 object-contain" /> : <Mic size={20} />}
               </button>
               <button 
                 onClick={() => setShowEmotePicker(!showEmotePicker)}
                 className={`p-2.5 rounded-full backdrop-blur-md transition ${showEmotePicker ? 'bg-purple-600 text-white' : 'bg-black/40 hover:bg-black/60'}`}
               >
-                <Smile size={20} />
+                {appIcons.smileIcon ? <img src={appIcons.smileIcon} className="w-5 h-5 object-contain" /> : <Smile size={20} />}
               </button>
               
               {/* Emote Picker */}
@@ -1085,7 +1087,7 @@ export default function LiveRoom({
                 </button>
               )}
               <button onClick={() => setShowAdminTools(true)} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
-                <MoreHorizontal size={20} />
+                {appIcons.moreIcon ? <img src={appIcons.moreIcon} className="w-5 h-5 object-contain" /> : <MoreHorizontal size={20} />}
               </button>
               <button onClick={async () => {
                 if (!user) return;
@@ -1114,7 +1116,7 @@ export default function LiveRoom({
                   partnerMicFrame: partnerData.equippedMicFrame || null
                 });
               }} className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
-                <User size={20} />
+                {appIcons.profileIcon ? <img src={appIcons.profileIcon} className="w-5 h-5 object-contain" /> : <User size={20} />}
               </button>
               <div className="flex-1"></div>
               <button onClick={() => {
@@ -1348,15 +1350,15 @@ export default function LiveRoom({
               <h3 className="text-center font-bold mb-6 text-gray-200">أدوات الغرفة</h3>
               <div className="grid grid-cols-4 gap-y-6 gap-x-4">
                 {[
-                  { icon: <Gamepad2 />, label: 'الألعاب', color: 'text-purple-400', action: () => { setShowAdminTools(false); setShowGameCenter(true); } },
+                  { icon: appIcons.gamesIcon ? <img src={appIcons.gamesIcon} className="w-6 h-6 object-contain" /> : <Gamepad2 />, label: 'الألعاب', color: 'text-purple-400', action: () => { setShowAdminTools(false); setShowGameCenter(true); } },
                   { icon: <Gift />, label: 'صندوق الحظ', color: 'text-yellow-400', action: () => { setShowAdminTools(false); setShowLuckyBoxModal(true); } },
-                  { icon: <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
+                  { icon: appIcons.storeIcon ? <img src={appIcons.storeIcon} className="w-6 h-6 object-contain" /> : <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
-                  { icon: <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
+                  { icon: appIcons.settingsIcon ? <img src={appIcons.settingsIcon} className="w-6 h-6 object-contain" /> : <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
                   ...(room.hostId === user?.uid || userData?.role === 'admin' ? [
                     { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
-                    { icon: <Music />, label: 'موسيقى', color: 'text-green-400' },
-                    { icon: <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
+                    { icon: appIcons.musicIcon ? <img src={appIcons.musicIcon} className="w-6 h-6 object-contain" /> : <Music />, label: 'موسيقى', color: 'text-green-400' },
+                    { icon: appIcons.usersIcon ? <img src={appIcons.usersIcon} className="w-6 h-6 object-contain" /> : <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
                     { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
                     { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
                       setShowAdminTools(false);
@@ -1982,7 +1984,9 @@ export default function LiveRoom({
                 </div>
                 <div className={`bg-gray-800/50 border px-6 py-2.5 rounded-2xl text-center flex-1 ${getLevelColor(calculateLevel(selectedProfile.totalSpent || 0)).border}`}>
                   <p className="text-[10px] text-gray-400 mb-1">مستوى الشحن</p>
-                  <p className={`font-bold flex items-center gap-1 justify-center ${getLevelColor(calculateLevel(selectedProfile.totalSpent || 0)).text}`}><Diamond size={14}/> Lv.{calculateLevel(selectedProfile.totalSpent || 0)}</p>
+                  <p className={`font-bold flex items-center gap-1 justify-center ${getLevelColor(calculateLevel(selectedProfile.totalSpent || 0)).text}`}>
+                    {appIcons.diamondIcon ? <img src={appIcons.diamondIcon} className="w-3.5 h-3.5 object-contain" /> : <Diamond size={14}/>} Lv.{calculateLevel(selectedProfile.totalSpent || 0)}
+                  </p>
                 </div>
               </div>
 
