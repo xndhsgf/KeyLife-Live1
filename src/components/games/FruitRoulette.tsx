@@ -83,7 +83,7 @@ export default function FruitRoulette() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-white bg-gray-950 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-full p-4 text-white bg-gray-950 relative overflow-y-auto custom-scrollbar">
       <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/casino/800/600')] bg-cover bg-center opacity-20"></div>
       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/80"></div>
       

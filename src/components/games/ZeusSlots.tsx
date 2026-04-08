@@ -76,7 +76,7 @@ export default function ZeusSlots() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-2 sm:p-4 text-white bg-gray-950 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-full p-2 sm:p-4 text-white bg-gray-950 relative overflow-y-auto custom-scrollbar">
       <div className="bg-[url('https://picsum.photos/seed/zeus/800/600')] bg-cover bg-center absolute inset-0 opacity-20"></div>
       <div className="bg-black/60 absolute inset-0"></div>
       

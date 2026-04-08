@@ -185,7 +185,7 @@ export default function LuckyCatGame() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1a0b2e] text-white relative overflow-hidden font-sans" dir="rtl">
+    <div className="flex flex-col h-full bg-[#1a0b2e] text-white relative overflow-y-auto custom-scrollbar font-sans" dir="rtl">
       {/* Background elements */}
       <div className="absolute inset-0 bg-gradient-to-b from-purple-900/50 to-[#1a0b2e]"></div>
       <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>

@@ -83,7 +83,7 @@ export default function RocketCrash() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-2 sm:p-4 text-white bg-gradient-to-b from-indigo-950 via-purple-900 to-indigo-900 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-full p-2 sm:p-4 text-white bg-gradient-to-b from-indigo-950 via-purple-900 to-indigo-900 relative overflow-y-auto custom-scrollbar">
       {/* Balance Display */}
       <div className="absolute top-4 right-4 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-2xl border border-yellow-500/30 flex items-center gap-2 shadow-lg">
         <span className="text-yellow-400 font-black text-sm">{userDiamonds.toLocaleString()}</span>
