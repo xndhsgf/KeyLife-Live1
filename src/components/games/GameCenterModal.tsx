@@ -6,9 +6,22 @@ import RocketCrash from './RocketCrash';
 import LuckyCatGame from './LuckyCatGame';
 import JackpotFruits from './JackpotFruits';
 import { registerBackHandler, unregisterBackHandler } from '../../hooks/useBackButton';
+import { db } from '../../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function GameCenterModal({ onClose }: { onClose: () => void }) {
   const [activeGame, setActiveGame] = useState<string | null>(null);
+  const [gameImages, setGameImages] = useState<any>({});
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      const docSnap = await getDoc(doc(db, 'settings', 'games_config'));
+      if (docSnap.exists()) {
+        setGameImages(docSnap.data());
+      }
+    };
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     const handleBack = () => {
@@ -39,37 +52,52 @@ export default function GameCenterModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <div className={`flex-1 overflow-y-auto ${activeGame ? 'p-0' : 'p-4'} bg-gray-950/30`}>
+        <div className={`flex-1 overflow-y-auto ${activeGame ? 'p-0' : 'p-6 sm:p-10'} bg-gray-950/50`}>
           {!activeGame ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center max-w-6xl mx-auto">
               <GameCard 
                 title="جاكبوت الفواكه" 
-                icon={<Coins size={48} className="text-yellow-400" />}
-                color="from-yellow-600/20 to-red-600/20 border-yellow-500/30"
+                icon={<Coins size={56} className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]" />}
+                borderColor="border-yellow-500/40 hover:border-yellow-400"
+                shadowColor="hover:shadow-[0_0_30px_rgba(234,179,8,0.3)]"
+                glowColor="from-yellow-600 to-red-600"
+                image={gameImages.jackpotFruitsImage}
                 onClick={() => setActiveGame('jackpotfruits')}
               />
               <GameCard 
                 title="القط المحظوظ" 
-                icon={<Cat size={48} className="text-purple-400" />}
-                color="from-purple-600/20 to-indigo-600/20 border-purple-500/30"
+                icon={<Cat size={56} className="text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" />}
+                borderColor="border-purple-500/40 hover:border-purple-400"
+                shadowColor="hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]"
+                glowColor="from-purple-600 to-pink-600"
+                image={gameImages.luckyCatImage}
                 onClick={() => setActiveGame('luckycat')}
               />
               <GameCard 
                 title="عجلة الفواكه" 
-                icon={<Cherry size={48} className="text-red-500" />}
-                color="from-red-500/20 to-orange-500/20 border-red-500/30"
+                icon={<Cherry size={56} className="text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />}
+                borderColor="border-red-500/40 hover:border-red-400"
+                shadowColor="hover:shadow-[0_0_30px_rgba(239,68,68,0.3)]"
+                glowColor="from-red-600 to-orange-600"
+                image={gameImages.fruitImage}
                 onClick={() => setActiveGame('fruit')}
               />
               <GameCard 
                 title="سلوتس زيوس" 
-                icon={<Zap size={48} className="text-yellow-400" />}
-                color="from-yellow-600/20 to-yellow-400/20 border-yellow-500/30"
+                icon={<Zap size={56} className="text-yellow-300 drop-shadow-[0_0_15px_rgba(253,224,71,0.5)]" />}
+                borderColor="border-yellow-400/40 hover:border-yellow-300"
+                shadowColor="hover:shadow-[0_0_30px_rgba(253,224,71,0.3)]"
+                glowColor="from-yellow-400 to-amber-600"
+                image={gameImages.zeusImage}
                 onClick={() => setActiveGame('zeus')}
               />
               <GameCard 
                 title="الصاروخ (Crash)" 
-                icon={<Rocket size={48} className="text-blue-500" />}
-                color="from-blue-600/20 to-purple-600/20 border-blue-500/30"
+                icon={<Rocket size={56} className="text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,0.5)]" />}
+                borderColor="border-blue-500/40 hover:border-blue-400"
+                shadowColor="hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]"
+                glowColor="from-blue-600 to-cyan-600"
+                image={gameImages.rocketImage}
                 onClick={() => setActiveGame('rocket')}
               />
             </div>
@@ -96,15 +124,42 @@ export default function GameCenterModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GameCard({ title, icon, color, onClick }: any) {
+function GameCard({ title, icon, borderColor, shadowColor, glowColor, image, onClick }: any) {
   return (
-    <div onClick={onClick} className={`bg-gradient-to-br ${color} p-0.5 rounded-2xl cursor-pointer hover:scale-[1.02] active:scale-95 transition-all shadow-xl border`}>
-      <div className="bg-gray-900/90 h-44 rounded-xl flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
-        <div className="p-4 bg-gray-800/50 rounded-2xl shadow-inner">
-          {icon}
+    <div 
+      onClick={onClick} 
+      className={`relative group cursor-pointer rounded-[2rem] overflow-hidden w-full max-w-[300px] aspect-square border-2 ${borderColor} shadow-lg ${shadowColor} transition-all duration-500 hover:-translate-y-2 bg-gray-900 mx-auto`}
+    >
+      {/* Background Image */}
+      {image ? (
+        <img src={image} alt={title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+      ) : (
+        <div className={`absolute inset-0 bg-gradient-to-br ${glowColor} opacity-10 group-hover:opacity-20 transition-opacity duration-500`}></div>
+      )}
+
+      {/* Gradient Overlay for Text Readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/40 to-transparent opacity-90 group-hover:opacity-60 transition-opacity duration-500"></div>
+      <div className="absolute inset-0 bg-gradient-to-t from-gray-950 to-transparent opacity-80 h-1/2 mt-auto"></div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center justify-end h-full p-6 pb-8">
+        {!image && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-6 rounded-3xl bg-gray-800/40 backdrop-blur-xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500">
+            {icon}
+          </div>
+        )}
+        
+        <h3 className="text-white font-black text-2xl tracking-wide drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] text-center z-20 transform group-hover:-translate-y-2 transition-transform duration-500">
+          {title}
+        </h3>
+        
+        <div className="absolute bottom-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 z-20">
+           <span className="text-sm font-bold text-white/90 uppercase tracking-widest bg-black/50 px-4 py-1 rounded-full backdrop-blur-md border border-white/20">العب الآن</span>
         </div>
-        <h3 className="text-white font-bold text-xl">{title}</h3>
       </div>
+      
+      {/* Inner Glow */}
+      <div className={`absolute inset-0 rounded-[2rem] border border-white/5 pointer-events-none`}></div>
     </div>
   );
 }

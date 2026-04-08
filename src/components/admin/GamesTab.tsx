@@ -9,7 +9,12 @@ export default function GamesTab() {
     zeusWinRatio: 20,
     rocketMaxCrash: 5,
     luckyCatWinRatio: 30,
-    jackpotFruitsWinRatio: 30
+    jackpotFruitsWinRatio: 30,
+    jackpotFruitsImage: '',
+    luckyCatImage: '',
+    fruitImage: '',
+    zeusImage: '',
+    rocketImage: ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +28,11 @@ export default function GamesTab() {
           rocketMaxCrash: 5,
           luckyCatWinRatio: 30,
           jackpotFruitsWinRatio: 30,
+          jackpotFruitsImage: '',
+          luckyCatImage: '',
+          fruitImage: '',
+          zeusImage: '',
+          rocketImage: '',
           ...docSnap.data()
         });
       }
@@ -111,6 +121,72 @@ export default function GamesTab() {
             onChange={e => setConfig({...config, rocketMaxCrash: parseFloat(e.target.value)})}
             className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
+        </div>
+
+        <div className="border-t pt-6 mt-6">
+          <h4 className="text-md font-bold text-gray-800 mb-4">صور واجهات الألعاب (روابط)</h4>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">صورة جاكبوت الفواكه</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={config.jackpotFruitsImage}
+                onChange={e => setConfig({...config, jackpotFruitsImage: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left"
+                dir="ltr"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">صورة القط المحظوظ</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={config.luckyCatImage}
+                onChange={e => setConfig({...config, luckyCatImage: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">صورة عجلة الفواكه</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={config.fruitImage}
+                onChange={e => setConfig({...config, fruitImage: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">صورة سلوتس زيوس</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={config.zeusImage}
+                onChange={e => setConfig({...config, zeusImage: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left"
+                dir="ltr"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">صورة الصاروخ (Crash)</label>
+              <input
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={config.rocketImage}
+                onChange={e => setConfig({...config, rocketImage: e.target.value})}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-left"
+                dir="ltr"
+              />
+            </div>
+          </div>
         </div>
 
         <button
