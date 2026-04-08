@@ -93,7 +93,7 @@ export default function FruitRoulette() {
         <span className="text-xs">💎</span>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center w-full max-w-md">
+      <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
         <div className="relative w-48 h-48 sm:w-64 sm:h-64 mb-6 sm:mb-8">
           {/* Pointer */}
           <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-6 h-8 bg-yellow-400 z-20 shadow-lg" style={{ clipPath: 'polygon(50% 100%, 0 0, 100% 0)' }}></div>

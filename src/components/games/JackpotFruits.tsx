@@ -303,8 +303,8 @@ export default function JackpotFruits() {
   };
 
   return (
-    <div className="h-full bg-[#2a0a4a] text-white font-sans overflow-hidden flex justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-gradient-to-b from-[#3a1060] via-[#2a0a4a] to-[#1a0530] relative shadow-2xl flex flex-col h-full">
+    <div className="h-full bg-[#2a0a4a] text-white font-sans overflow-y-auto flex justify-center custom-scrollbar" dir="rtl">
+      <div className="w-full max-w-2xl bg-gradient-to-b from-[#3a1060] via-[#2a0a4a] to-[#1a0530] relative shadow-2xl flex flex-col min-h-full">
         
         <AnimatePresence>
           {winNotification && (

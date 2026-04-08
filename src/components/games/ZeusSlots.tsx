@@ -86,7 +86,7 @@ export default function ZeusSlots() {
         <span className="text-xs">💎</span>
       </div>
 
-      <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
+      <div className="relative z-10 flex flex-col items-center w-full max-w-4xl">
         <div className="text-3xl sm:text-5xl mb-4 sm:mb-8 font-black text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] tracking-wider">
           ZEUS SLOTS
         </div>
