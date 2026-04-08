@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Receipt, Users, Phone, ShieldCheck, Bell, Search } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import PrivateChat from './PrivateChat';
 
@@ -9,6 +9,16 @@ export default function MessagesPage() {
   const { user } = useAuth();
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const [activeChat, setActiveChat] = useState<{id: string, name: string, photo: string} | null>(null);
+  const [appName, setAppName] = useState('Cocco');
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, 'settings', 'app_config'), (doc) => {
+      if (doc.exists() && doc.data().appName) {
+        setAppName(doc.data().appName);
+      }
+    });
+    return () => unsubConfig();
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -25,7 +35,7 @@ export default function MessagesPage() {
     { icon: <Receipt size={20} />, label: 'فاتورة', color: 'bg-blue-100 text-blue-600' },
     { icon: <Users size={20} />, label: 'متابع', color: 'bg-pink-100 text-pink-600' },
     { icon: <Phone size={20} />, label: 'الاتصالات', color: 'bg-green-100 text-green-600' },
-    { icon: <ShieldCheck size={20} />, label: 'Cocco', color: 'bg-purple-100 text-purple-600' },
+    { icon: <ShieldCheck size={20} />, label: appName, color: 'bg-purple-100 text-purple-600' },
   ];
 
   if (activeChat) {
@@ -96,7 +106,7 @@ export default function MessagesPage() {
           <div className="flex-1">
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-gray-800 text-sm flex items-center gap-1">
-                Cocco Official
+                {appName} Official
                 <span className="bg-blue-100 text-blue-600 text-[8px] px-1 rounded">رسمي</span>
               </h3>
               <span className="text-[10px] text-gray-400">Yesterday</span>
@@ -118,7 +128,14 @@ export default function MessagesPage() {
               className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition"
             >
               <div className="relative">
-                <img src={targetPhoto} alt={targetName} className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
+                {(() => {
+                  const isVideo = targetPhoto.toLowerCase().includes('.mp4');
+                  return isVideo ? (
+                    <video src={targetPhoto} autoPlay loop muted playsInline className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <img src={targetPhoto} alt={targetName} className="w-12 h-12 rounded-full object-cover" referrerPolicy="no-referrer" />
+                  );
+                })()}
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-center">

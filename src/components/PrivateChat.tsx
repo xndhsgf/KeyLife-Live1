@@ -70,13 +70,21 @@ export default function PrivateChat({ targetUserId, targetUserName, targetUserPh
   };
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+    <div className="absolute inset-0 bg-white z-[100] flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
         <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
           <ChevronRight size={24} className="text-gray-600" />
         </button>
-        <img src={targetUserPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`} alt={targetUserName} className="w-10 h-10 rounded-full object-cover" />
+        {(() => {
+          const photoUrl = targetUserPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`;
+          const isVideo = photoUrl.toLowerCase().includes('.mp4');
+          return isVideo ? (
+            <video src={photoUrl} autoPlay loop muted playsInline className="w-10 h-10 rounded-full object-cover" />
+          ) : (
+            <img src={photoUrl} alt={targetUserName} className="w-10 h-10 rounded-full object-cover" />
+          );
+        })()}
         <h2 className="font-bold text-gray-800 flex-1">{targetUserName}</h2>
       </div>
 

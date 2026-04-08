@@ -11,6 +11,7 @@ import AdminResetTab from './admin/AdminResetTab';
 import CPTab from './admin/CPTab';
 import GamesTab from './admin/GamesTab';
 import ActiveRoomsTab from './admin/ActiveRoomsTab';
+import AppSettingsTab from './admin/AppSettingsTab';
 
 import AppIconsTab from './admin/AppIconsTab';
 
@@ -75,6 +76,7 @@ export default function AdminDashboard() {
       case 'reset': return <AdminResetTab />;
       case 'users': return <UsersTab />;
       case 'active_rooms': return <ActiveRoomsTab />;
+      case 'app_settings': return <AppSettingsTab />;
       default: return null;
     }
   };
@@ -111,6 +113,7 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
           <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
           <TabCard onClick={() => setActiveTab('active_rooms')} icon={<Radio size={24} />} label="الغرف النشطة" />
+          <TabCard onClick={() => setActiveTab('app_settings')} icon={<Settings size={24} />} label="إعدادات التطبيق" />
         </div>
       </div>
 

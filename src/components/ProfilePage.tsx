@@ -140,7 +140,15 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
         
         <div className="flex items-center gap-4 mt-4">
           <div className="relative w-20 h-20 flex items-center justify-center">
-            <img src={isEditing ? (editPhotoURL || "https://picsum.photos/seed/myprofile/100/100") : (user?.photoURL || "https://picsum.photos/seed/myprofile/100/100")} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-purple-100" referrerPolicy="no-referrer" />
+            {(() => {
+              const src = isEditing ? (editPhotoURL || "https://picsum.photos/seed/myprofile/100/100") : (user?.photoURL || "https://picsum.photos/seed/myprofile/100/100");
+              const isVideo = src.toLowerCase().includes('.mp4');
+              return isVideo ? (
+                <video src={src} autoPlay loop muted playsInline className="w-full h-full rounded-full object-cover border-2 border-purple-100" />
+              ) : (
+                <img src={src} alt="Profile" className="w-full h-full rounded-full object-cover border-2 border-purple-100" referrerPolicy="no-referrer" />
+              );
+            })()}
             {userData?.equippedMicFrame && !isEditing && (
               <img src={userData.equippedMicFrame || undefined} className="absolute inset-0 w-full h-full object-contain scale-[1.35] pointer-events-none z-10" alt="Avatar Frame" />
             )}

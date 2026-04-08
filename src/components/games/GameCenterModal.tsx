@@ -52,9 +52,9 @@ export default function GameCenterModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <div className={`flex-1 overflow-y-auto ${activeGame ? 'p-0' : 'p-6 sm:p-10'} bg-gray-950/50`}>
+        <div className={`flex-1 overflow-y-auto ${activeGame ? 'p-0' : 'p-4 sm:p-10'} bg-gray-950/50`}>
           {!activeGame ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center max-w-6xl mx-auto">
+            <div className="grid grid-cols-3 gap-3 sm:gap-8 justify-items-center max-w-6xl mx-auto">
               <GameCard 
                 title="جاكبوت الفواكه" 
                 icon={<Coins size={56} className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]" />}
@@ -128,7 +128,7 @@ function GameCard({ title, icon, borderColor, shadowColor, glowColor, image, onC
   return (
     <div 
       onClick={onClick} 
-      className={`relative group cursor-pointer rounded-[2rem] overflow-hidden w-full max-w-[300px] aspect-square border-2 ${borderColor} shadow-lg ${shadowColor} transition-all duration-500 hover:-translate-y-2 bg-gray-900 mx-auto`}
+      className={`relative group cursor-pointer rounded-2xl sm:rounded-[2rem] overflow-hidden w-full max-w-[300px] aspect-square border-2 ${borderColor} shadow-lg ${shadowColor} transition-all duration-500 hover:-translate-y-2 bg-gray-900 mx-auto`}
     >
       {/* Background Image */}
       {image ? (
@@ -142,24 +142,24 @@ function GameCard({ title, icon, borderColor, shadowColor, glowColor, image, onC
       <div className="absolute inset-0 bg-gradient-to-t from-gray-950 to-transparent opacity-80 h-1/2 mt-auto"></div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-end h-full p-6 pb-8">
+      <div className="relative z-10 flex flex-col items-center justify-end h-full p-2 sm:p-6 pb-4 sm:pb-8">
         {!image && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-6 rounded-3xl bg-gray-800/40 backdrop-blur-xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500">
-            {icon}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-3 sm:p-6 rounded-2xl sm:rounded-3xl bg-gray-800/40 backdrop-blur-xl border border-white/10 shadow-2xl group-hover:scale-110 transition-transform duration-500">
+            <div className="scale-50 sm:scale-100 origin-center">{icon}</div>
           </div>
         )}
         
-        <h3 className="text-white font-black text-2xl tracking-wide drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] text-center z-20 transform group-hover:-translate-y-2 transition-transform duration-500">
+        <h3 className="text-white font-black text-xs sm:text-2xl tracking-wide drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] text-center z-20 transform group-hover:-translate-y-1 sm:group-hover:-translate-y-2 transition-transform duration-500 leading-tight">
           {title}
         </h3>
         
-        <div className="absolute bottom-3 opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 z-20">
+        <div className="absolute bottom-1 sm:bottom-3 opacity-0 group-hover:opacity-100 transform translate-y-2 sm:translate-y-4 group-hover:translate-y-0 transition-all duration-500 z-20 hidden sm:block">
            <span className="text-sm font-bold text-white/90 uppercase tracking-widest bg-black/50 px-4 py-1 rounded-full backdrop-blur-md border border-white/20">العب الآن</span>
         </div>
       </div>
       
       {/* Inner Glow */}
-      <div className={`absolute inset-0 rounded-[2rem] border border-white/5 pointer-events-none`}></div>
+      <div className={`absolute inset-0 rounded-2xl sm:rounded-[2rem] border border-white/5 pointer-events-none`}></div>
     </div>
   );
 }

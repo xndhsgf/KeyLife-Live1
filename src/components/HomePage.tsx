@@ -16,6 +16,16 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
   const [topSupporters, setTopSupporters] = useState<any[]>([]);
   const [targetCpId, setTargetCpId] = useState('');
   const [cpLoading, setCpLoading] = useState(false);
+  const [appName, setAppName] = useState('Cocco');
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(doc(db, 'settings', 'app_config'), (doc) => {
+      if (doc.exists() && doc.data().appName) {
+        setAppName(doc.data().appName);
+      }
+    });
+    return () => unsubConfig();
+  }, []);
 
   useEffect(() => {
     const handleBack = () => {
@@ -149,7 +159,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       {/* Header */}
       <div className="bg-white px-4 pt-6 pb-2 sticky top-0 z-10 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold text-gray-800">Cocco</h1>
+          <h1 className="text-xl font-bold text-gray-800">{appName}</h1>
           <div className="flex gap-3 text-gray-600">
             <Search size={24} />
             <Bell size={24} />
