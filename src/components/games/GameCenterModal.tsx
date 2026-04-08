@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Gamepad2, Rocket, Cherry, Zap, Cat } from 'lucide-react';
+import { X, Gamepad2, Rocket, Cherry, Zap, Cat, Coins } from 'lucide-react';
 import FruitRoulette from './FruitRoulette';
 import ZeusSlots from './ZeusSlots';
 import RocketCrash from './RocketCrash';
 import LuckyCatGame from './LuckyCatGame';
+import JackpotFruits from './JackpotFruits';
 import { registerBackHandler, unregisterBackHandler } from '../../hooks/useBackButton';
 
 export default function GameCenterModal({ onClose }: { onClose: () => void }) {
@@ -39,6 +40,12 @@ export default function GameCenterModal({ onClose }: { onClose: () => void }) {
           {!activeGame ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <GameCard 
+                title="جاكبوت الفواكه" 
+                icon={<Coins size={48} className="text-yellow-400" />}
+                color="from-yellow-600/20 to-red-600/20 border-yellow-500/30"
+                onClick={() => setActiveGame('jackpotfruits')}
+              />
+              <GameCard 
                 title="القط المحظوظ" 
                 icon={<Cat size={48} className="text-purple-400" />}
                 color="from-purple-600/20 to-indigo-600/20 border-purple-500/30"
@@ -70,6 +77,7 @@ export default function GameCenterModal({ onClose }: { onClose: () => void }) {
                 <span className="font-bold">العودة للقائمة</span>
               </button>
               <div className="flex-1 bg-black/50 rounded-2xl overflow-hidden border border-gray-800 relative min-h-[400px]">
+                {activeGame === 'jackpotfruits' && <JackpotFruits />}
                 {activeGame === 'luckycat' && <LuckyCatGame />}
                 {activeGame === 'fruit' && <FruitRoulette />}
                 {activeGame === 'zeus' && <ZeusSlots />}

@@ -8,7 +8,8 @@ export default function GamesTab() {
     fruitWinRatio: 30,
     zeusWinRatio: 20,
     rocketMaxCrash: 5,
-    luckyCatWinRatio: 30
+    luckyCatWinRatio: 30,
+    jackpotFruitsWinRatio: 30
   });
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +22,7 @@ export default function GamesTab() {
           zeusWinRatio: 20,
           rocketMaxCrash: 5,
           luckyCatWinRatio: 30,
+          jackpotFruitsWinRatio: 30,
           ...docSnap.data()
         });
       }
@@ -57,6 +59,19 @@ export default function GamesTab() {
             className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
           <p className="text-xs text-gray-500 mt-1">مثال: 30 تعني أن اللاعب لديه فرصة 30% للفوز في كل لفة.</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">نسبة الفوز في جاكبوت الفواكه (%)</label>
+          <input
+            type="number"
+            required
+            min="0"
+            max="100"
+            value={config.jackpotFruitsWinRatio}
+            onChange={e => setConfig({...config, jackpotFruitsWinRatio: parseInt(e.target.value)})}
+            className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
         </div>
 
         <div>
