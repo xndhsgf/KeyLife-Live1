@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3 } from 'lucide-react';
+import { X, Users, Gift, Mic, MicOff, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc, increment, deleteDoc, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import BackgroundSelector from './BackgroundSelector';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
 import PrivateChat from './PrivateChat';
+import { useAgora } from '../hooks/useAgora';
 
 export default function LiveRoom({ 
   roomId, 
@@ -101,6 +102,9 @@ export default function LiveRoom({
   const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const mountTime = useRef(Date.now());
   const entranceTriggeredRef = useRef(false);
+
+  const isOnMic = !!mics.find(m => m.userId === user?.uid);
+  const { isJoined, isMuted, toggleMute, remoteUsers, speakingUsers } = useAgora(roomId, user?.uid, isOnMic);
 
   useEffect(() => {
     const handleBack = () => {
@@ -894,7 +898,7 @@ export default function LiveRoom({
                       ))}
                     </AnimatePresence>
 
-                    <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'} ${mic.userId && mic.cpPartnerId && mics.some(m => m.userId === mic.cpPartnerId) ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/20' : ''}`}>
+                    <div className={`w-16 h-16 rounded-full border-2 p-0.5 transition-all ${mic.userId ? 'border-purple-400 bg-purple-500/20' : mic.status === 'locked' ? 'border-red-500/50 bg-red-500/20' : 'border-transparent'} ${mic.userId && mic.cpPartnerId && mics.some(m => m.userId === mic.cpPartnerId) ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/20' : ''} ${speakingUsers.includes(mic.userId) ? 'ring-4 ring-green-400 shadow-[0_0_15px_rgba(74,222,128,0.6)]' : ''}`}>
                       {mic.userId ? (
                         <>
                           <img src={mic.userAvatar || undefined} className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
@@ -1094,8 +1098,12 @@ export default function LiveRoom({
             </form>
             
             <div className="flex items-center gap-3 relative">
-              <button className="bg-black/40 p-2.5 rounded-full backdrop-blur-md hover:bg-black/60 transition">
-                {appIcons.micIcon ? <img src={appIcons.micIcon} className="w-5 h-5 object-contain" /> : <Mic size={20} />}
+              <button 
+                onClick={toggleMute}
+                disabled={!isOnMic}
+                className={`p-2.5 rounded-full backdrop-blur-md transition ${!isOnMic ? 'bg-black/20 opacity-50 cursor-not-allowed' : isMuted ? 'bg-red-500/80 text-white' : 'bg-black/40 hover:bg-black/60'}`}
+              >
+                {isMuted ? <MicOff size={20} /> : (appIcons.micIcon ? <img src={appIcons.micIcon} className="w-5 h-5 object-contain" /> : <Mic size={20} />)}
               </button>
               <button 
                 onClick={() => setShowEmotePicker(!showEmotePicker)}
