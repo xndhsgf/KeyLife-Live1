@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack, IRemoteUser } from 'agora-rtc-sdk-ng';
 
-const APP_ID = '12ac74be251f413ca10fe6e23bdaa669';
+const APP_ID = '0070879b369c4918a9e7543966d9a02b';
 
 export function useAgora(roomId: string, userId: string | undefined, isOnMic: boolean) {
   const [client, setClient] = useState<IAgoraRTCClient | null>(null);
