@@ -240,55 +240,57 @@ export default function DiscoverPage() {
 
       {/* Create Post Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slide-up max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <h2 className="text-lg font-bold text-gray-800">إنشاء منشور جديد</h2>
               <button onClick={() => setShowCreateModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition">
                 <X size={20} className="text-gray-600" />
               </button>
             </div>
             
-            <textarea
-              value={postText}
-              onChange={(e) => setPostText(e.target.value)}
-              placeholder="بم تفكر؟"
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none mb-4"
-              dir="auto"
-            />
+            <div className="overflow-y-auto flex-1 pr-1 custom-scrollbar">
+              <textarea
+                value={postText}
+                onChange={(e) => setPostText(e.target.value)}
+                placeholder="بم تفكر؟"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 min-h-[120px] focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none mb-4"
+                dir="auto"
+              />
 
-            <input
-              type="text"
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              placeholder="رابط الصورة أو الفيديو (MP4)..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-4 text-left"
-              dir="ltr"
-            />
+              <input
+                type="text"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+                placeholder="رابط الصورة أو الفيديو (MP4)..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-500 mb-4 text-left"
+                dir="ltr"
+              />
 
-            {mediaUrl && (
-              <div className="relative mb-4 rounded-xl overflow-hidden bg-gray-100 h-40">
-                {mediaUrl.toLowerCase().includes('.mp4') ? (
-                  <video src={mediaUrl} controls className="w-full h-full object-contain" />
-                ) : (
-                  <img src={mediaUrl} alt="Preview" className="w-full h-full object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                )}
-                <button 
-                  onClick={() => setMediaUrl('')}
-                  className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-black/70"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
+              {mediaUrl && (
+                <div className="relative mb-4 rounded-xl overflow-hidden bg-gray-100 h-40 shrink-0">
+                  {mediaUrl.toLowerCase().includes('.mp4') ? (
+                    <video src={mediaUrl} controls className="w-full h-full object-contain" />
+                  ) : (
+                    <img src={mediaUrl} alt="Preview" className="w-full h-full object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                  )}
+                  <button 
+                    onClick={() => setMediaUrl('')}
+                    className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-black/70"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end mt-4 shrink-0 pb-4 sm:pb-0">
               <button 
                 onClick={handleCreatePost}
                 disabled={isUploading || (!postText.trim() && !mediaUrl.trim())}
-                className="bg-purple-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2"
+                className="bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition disabled:opacity-50 flex items-center gap-2 w-full sm:w-auto justify-center"
               >
-                {isUploading ? <Loader2 size={20} className="animate-spin" /> : 'نشر'}
+                {isUploading ? <Loader2 size={20} className="animate-spin" /> : 'نشر المنشور'}
               </button>
             </div>
           </div>
