@@ -35,6 +35,8 @@ export default function LiveRoom({
   const [showLuckyBoxModal, setShowLuckyBoxModal] = useState(false);
   const [showGameCenter, setShowGameCenter] = useState(false);
   const [bigWinConfig, setBigWinConfig] = useState<any>(null);
+  const [cpConfig, setCpConfig] = useState<any>(null);
+  const [incomingCpRequest, setIncomingCpRequest] = useState<any>(null);
   const [room, setRoom] = useState<any>({});
 
   useEffect(() => {
@@ -45,6 +47,14 @@ export default function LiveRoom({
       }
     };
     fetchBigWinConfig();
+
+    const fetchCpConfig = async () => {
+      const docSnap = await getDoc(doc(db, 'settings', 'cp_config'));
+      if (docSnap.exists()) {
+        setCpConfig(docSnap.data());
+      }
+    };
+    fetchCpConfig();
   }, []);
   const [mallCategory, setMallCategory] = useState('mic_frame');
   const [selectedProfile, setSelectedProfile] = useState<any>(null);
@@ -250,7 +260,16 @@ export default function LiveRoom({
       setCpMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubGlobalSettings(); unsubRoom(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubEmotes(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); };
+    const qCpRequests = query(collection(db, 'cp_requests'), where('receiverId', '==', user.uid), where('roomId', '==', roomId), where('status', '==', 'pending'));
+    const unsubCpRequests = onSnapshot(qCpRequests, (snapshot) => {
+      if (!snapshot.empty) {
+        setIncomingCpRequest({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      } else {
+        setIncomingCpRequest(null);
+      }
+    });
+
+    return () => { unsubUser(); unsubAppIcons(); unsubSettings(); unsubGlobalSettings(); unsubRoom(); unsubMics(); unsubGifts(); unsubGiftCategories(); unsubStore(); unsubEmotes(); unsubChat(); unsubEvents(); unsubPurchased(); unsubCpChat(); unsubCpRequests(); };
   }, [user]);
 
   // Handle entrance effect on join
@@ -558,9 +577,68 @@ export default function LiveRoom({
     })();
   };
 
-  const handleSendGift = () => {
+  const handleSendGift = async () => {
     if (selectedReceivers.length === 0) return alert('الرجاء تحديد شخص لإرسال الهدية له');
     if (!selectedGift) return alert('الرجاء تحديد هدية');
+
+    if (cpConfig && selectedGift.id === cpConfig.cpGiftId) {
+      if (selectedReceivers.length > 1) {
+        return alert('هدية الارتباط (CP) يمكن إرسالها لشخص واحد فقط في كل مرة.');
+      }
+      const receiverId = selectedReceivers[0];
+      if (receiverId === user?.uid) {
+        return alert('لا يمكنك إرسال هدية الارتباط لنفسك.');
+      }
+      
+      const totalCost = selectedGift.value * giftQuantity;
+      if (userDiamonds < totalCost) {
+        return alert('رصيدك غير كافٍ لإرسال هذه الهدية.');
+      }
+
+      setIsSendingGift(true);
+      try {
+        // Deduct diamonds
+        await updateDoc(doc(db, 'users', user!.uid), {
+          diamonds: increment(-totalCost)
+        });
+        
+        // Send CP request
+        const receiverDoc = await getDoc(doc(db, 'users', receiverId));
+        const receiverData = receiverDoc.data();
+        
+        await setDoc(doc(collection(db, 'cp_requests')), {
+          senderId: user!.uid,
+          senderName: user!.displayName || 'مستخدم',
+          senderAvatar: user!.photoURL || '',
+          receiverId: receiverId,
+          receiverName: receiverData?.displayName || 'مستخدم',
+          receiverAvatar: receiverData?.photoURL || '',
+          status: 'pending',
+          roomId: roomId,
+          createdAt: new Date().toISOString(),
+          frameUrl: cpConfig.frameUrl || '',
+          backgroundUrl: cpConfig.backgroundUrl || ''
+        });
+
+        // Add a room chat message
+        await setDoc(doc(collection(db, 'rooms', roomId, 'room_chat')), {
+          text: `أرسل هدية الارتباط (CP) إلى ${receiverData?.displayName || 'مستخدم'}! 💍`,
+          userId: user!.uid,
+          userName: user!.displayName || 'مستخدم',
+          isSystemGift: true,
+          timestamp: Date.now()
+        });
+
+        alert('تم إرسال طلب الارتباط (CP) بنجاح! في انتظار موافقة الطرف الآخر.');
+        setShowGiftModal(false);
+      } catch (error: any) {
+        alert('حدث خطأ: ' + error.message);
+      } finally {
+        setIsSendingGift(false);
+      }
+      return;
+    }
+
     executeSendGift(selectedGift, selectedReceivers, giftQuantity);
   };
 
@@ -1270,8 +1348,14 @@ export default function LiveRoom({
                       <button 
                         key={gift.id}
                         onClick={() => setSelectedGift(gift)}
-                        className={`rounded-xl p-2 flex flex-col items-center gap-1 border transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                        className={`rounded-xl p-2 flex flex-col items-center gap-1 border transition-all relative ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                       >
+                        {cpConfig && cpConfig.cpGiftId === gift.id && (
+                          <div className="absolute -top-2 -right-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 shadow-lg z-10 flex items-center gap-0.5">
+                            <Heart size={8} className="fill-white" />
+                            CP
+                          </div>
+                        )}
                         <img src={gift.imageUrl || undefined} alt={gift.name} className="w-10 h-10 object-contain drop-shadow-md" />
                         <span className="text-[8px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
                         <div className="flex items-center gap-0.5 text-yellow-400 text-[9px] font-bold bg-black/40 px-1.5 py-0.5 rounded-full border border-white/5">
@@ -2207,6 +2291,113 @@ export default function LiveRoom({
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+        {/* Incoming CP Request Modal */}
+        {incomingCpRequest && (
+          <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-gradient-to-b from-pink-950 to-gray-900 rounded-3xl p-6 w-full max-w-sm relative border border-pink-500/30 shadow-2xl animate-scale-up overflow-hidden">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-overlay"></div>
+              
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="w-16 h-16 bg-pink-500/20 rounded-full flex items-center justify-center mb-4 animate-pulse border border-pink-500/50">
+                  <Heart size={32} className="text-pink-400 fill-pink-400" />
+                </div>
+                
+                <h3 className="text-2xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-rose-400 text-center">
+                  طلب ارتباط (CP) 💍
+                </h3>
+                
+                <p className="text-gray-300 text-center mb-8 text-sm">
+                  لقد أرسل لك <span className="font-bold text-pink-400">{incomingCpRequest.senderName}</span> هدية الارتباط! هل تقبل أن تكونوا ثنائي (CP)؟
+                </p>
+                
+                <div className="flex items-center justify-center gap-4 mb-8 w-full">
+                  {/* Sender */}
+                  <div className="flex flex-col items-center gap-2 w-1/3">
+                    <div className="relative">
+                      <img src={incomingCpRequest.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${incomingCpRequest.senderId}`} className="w-20 h-20 rounded-full object-cover border-4 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.3)]" />
+                      {incomingCpRequest.frameUrl && <img src={incomingCpRequest.frameUrl} className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] max-w-none object-contain pointer-events-none" />}
+                    </div>
+                    <p className="text-sm font-bold text-white text-center truncate w-full">{incomingCpRequest.senderName}</p>
+                  </div>
+
+                  {/* Heart */}
+                  <div className="flex flex-col items-center justify-center">
+                    <Heart size={24} className="text-pink-500 fill-pink-500 animate-bounce" />
+                  </div>
+
+                  {/* Receiver (You) */}
+                  <div className="flex flex-col items-center gap-2 w-1/3">
+                    <div className="relative">
+                      <img src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid}`} className="w-20 h-20 rounded-full object-cover border-4 border-pink-500/50 shadow-[0_0_20px_rgba(236,72,153,0.3)]" />
+                      {incomingCpRequest.frameUrl && <img src={incomingCpRequest.frameUrl} className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] max-w-none object-contain pointer-events-none" />}
+                    </div>
+                    <p className="text-sm font-bold text-white text-center truncate w-full">أنت</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 w-full">
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await updateDoc(doc(db, 'cp_requests', incomingCpRequest.id), { status: 'rejected' });
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }}
+                    className="flex-1 py-3 rounded-xl font-bold text-gray-300 bg-white/5 hover:bg-white/10 transition border border-white/10"
+                  >
+                    رفض
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        const batch = writeBatch(db);
+                        
+                        // Update sender
+                        batch.update(doc(db, 'users', incomingCpRequest.senderId), {
+                          cpPartnerId: user!.uid,
+                          cpPartnerName: user!.displayName || 'مستخدم',
+                          cpPartnerAvatar: user!.photoURL || '',
+                          equippedCpFrame: incomingCpRequest.frameUrl || '',
+                          cpBackground: incomingCpRequest.backgroundUrl || ''
+                        });
+
+                        // Update receiver
+                        batch.update(doc(db, 'users', user!.uid), {
+                          cpPartnerId: incomingCpRequest.senderId,
+                          cpPartnerName: incomingCpRequest.senderName || 'مستخدم',
+                          cpPartnerAvatar: incomingCpRequest.senderAvatar || '',
+                          equippedCpFrame: incomingCpRequest.frameUrl || '',
+                          cpBackground: incomingCpRequest.backgroundUrl || ''
+                        });
+
+                        // Update request status
+                        batch.update(doc(db, 'cp_requests', incomingCpRequest.id), { status: 'accepted' });
+
+                        // Send room message
+                        batch.set(doc(collection(db, 'rooms', roomId, 'room_chat')), {
+                          text: `🎉 مبروك! ${incomingCpRequest.senderName} و ${user!.displayName} أصبحا ثنائي (CP) الآن! 💍`,
+                          userId: 'system',
+                          userName: 'النظام',
+                          isSystemGift: true,
+                          timestamp: Date.now()
+                        });
+
+                        await batch.commit();
+                      } catch (e) {
+                        console.error(e);
+                        alert('حدث خطأ أثناء قبول الطلب');
+                      }
+                    }}
+                    className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:shadow-lg hover:shadow-pink-500/25 transition border border-pink-400/50"
+                  >
+                    قبول
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

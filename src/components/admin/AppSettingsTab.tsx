@@ -16,6 +16,10 @@ export default function AppSettingsTab() {
     homeCP: '',
     homeTopSupporters: ''
   });
+  const [rankingBackgrounds, setRankingBackgrounds] = useState({
+    cpRanking: '',
+    wealthRanking: ''
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -28,6 +32,7 @@ export default function AppSettingsTab() {
           const data = docSnap.data();
           if (data.appName) setAppName(data.appName);
           if (data.navIcons) setNavIcons(data.navIcons);
+          if (data.rankingBackgrounds) setRankingBackgrounds(data.rankingBackgrounds);
         } else {
           setAppName('Cocco');
         }
@@ -47,7 +52,8 @@ export default function AppSettingsTab() {
     try {
       await setDoc(doc(db, 'settings', 'app_config'), { 
         appName: appName.trim(),
-        navIcons
+        navIcons,
+        rankingBackgrounds
       }, { merge: true });
       setMessage('تم حفظ الإعدادات بنجاح');
       setTimeout(() => setMessage(''), 3000);
@@ -188,6 +194,34 @@ export default function AppSettingsTab() {
               onChange={(e) => handleIconChange('homeTopSupporters', e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
               placeholder="https://example.com/icon.png"
+              dir="ltr"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-8">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">خلفيات القوائم</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">خلفية قائمة "أفضل الثنائيات (CP)"</label>
+            <input
+              type="text"
+              value={rankingBackgrounds.cpRanking || ''}
+              onChange={(e) => setRankingBackgrounds({...rankingBackgrounds, cpRanking: e.target.value})}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/bg.png"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">خلفية قائمة "تصنيف الداعمين (ثروة)"</label>
+            <input
+              type="text"
+              value={rankingBackgrounds.wealthRanking || ''}
+              onChange={(e) => setRankingBackgrounds({...rankingBackgrounds, wealthRanking: e.target.value})}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/bg.png"
               dir="ltr"
             />
           </div>

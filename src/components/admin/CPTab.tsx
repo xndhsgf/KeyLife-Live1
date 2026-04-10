@@ -1,25 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { Save, Image as ImageIcon } from 'lucide-react';
+import { Save, Image as ImageIcon, Gift } from 'lucide-react';
 
 export default function CPTab() {
   const [config, setConfig] = useState({
     price: 1000,
     frameUrl: '',
-    backgroundUrl: ''
+    backgroundUrl: '',
+    cpGiftId: ''
   });
+  const [gifts, setGifts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [updateExisting, setUpdateExisting] = useState(true);
 
   useEffect(() => {
-    const fetchConfig = async () => {
+    const fetchConfigAndGifts = async () => {
       const docSnap = await getDoc(doc(db, 'settings', 'cp_config'));
       if (docSnap.exists()) {
-        setConfig(docSnap.data() as any);
+        setConfig(prev => ({ ...prev, ...docSnap.data() as any }));
       }
+      
+      const giftsSnap = await getDocs(collection(db, 'gifts'));
+      setGifts(giftsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
-    fetchConfig();
+    fetchConfigAndGifts();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -64,6 +69,24 @@ export default function CPTab() {
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
       <h3 className="text-lg font-bold text-gray-800 mb-6">إعدادات الـ CP (الكابلز)</h3>
       <form onSubmit={handleSave} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">هدية الـ CP (من صندوق الهدايا)</label>
+          <div className="relative">
+            <Gift className="absolute right-3 top-3 text-gray-400" size={20} />
+            <select
+              value={config.cpGiftId || ''}
+              onChange={e => setConfig({...config, cpGiftId: e.target.value})}
+              className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+            >
+              <option value="">-- اختر هدية الـ CP --</option>
+              {gifts.map(gift => (
+                <option key={gift.id} value={gift.id}>{gift.name} ({gift.value} 💎)</option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">عند إرسال هذه الهدية في الغرفة، سيتم إرسال طلب ارتباط (CP) للمستلم.</p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">سعر طلب الـ CP (بالألماس)</label>
           <input

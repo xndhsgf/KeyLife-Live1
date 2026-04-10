@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X } from 'lucide-react';
+import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X, Heart } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,14 +13,13 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [showCPModal, setShowCPModal] = useState(false);
-  const [showCreateCPModal, setShowCreateCPModal] = useState(false);
   const [topSupporters, setTopSupporters] = useState<any[]>([]);
   const [cpList, setCpList] = useState<any[]>([]);
-  const [targetCpId, setTargetCpId] = useState('');
-  const [cpLoading, setCpLoading] = useState(false);
   const [appName, setAppName] = useState('Cocco');
   const [navIcons, setNavIcons] = useState<any>({});
   
+  const [rankingBackgrounds, setRankingBackgrounds] = useState<any>({});
+
   // Search state
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +31,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       if (doc.exists()) {
         if (doc.data().appName) setAppName(doc.data().appName);
         if (doc.data().navIcons) setNavIcons(doc.data().navIcons);
+        if (doc.data().rankingBackgrounds) setRankingBackgrounds(doc.data().rankingBackgrounds);
       }
     });
     return () => unsubConfig();
@@ -41,94 +41,13 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
     const handleBack = () => {
       if (showRankingModal) { setShowRankingModal(false); return true; }
       if (showCPModal) { setShowCPModal(false); return true; }
-      if (showCreateCPModal) { setShowCreateCPModal(false); return true; }
       if (showSearchModal) { setShowSearchModal(false); return true; }
       return false;
     };
 
     registerBackHandler(handleBack);
     return () => unregisterBackHandler(handleBack);
-  }, [showRankingModal, showCPModal, showCreateCPModal, showSearchModal]);
-
-  const handleCPRequest = async () => {
-    if (!user || !targetCpId) return;
-    setCpLoading(true);
-    try {
-      // Get CP config
-      const configSnap = await getDoc(doc(db, 'settings', 'cp_config'));
-      const config = configSnap.exists() ? configSnap.data() : { price: 1000, frameUrl: '', backgroundUrl: '' };
-
-      // Get current user
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.data();
-
-      if ((userData?.diamonds || 0) < config.price) {
-        alert('رصيدك غير كافٍ لإرسال طلب الـ CP');
-        setCpLoading(false);
-        return;
-      }
-
-      // Find target user by numericId
-      const q = query(collection(db, 'users'), where('numericId', '==', targetCpId));
-      const querySnapshot = await getDocs(q);
-      
-      if (querySnapshot.empty) {
-        alert('لم يتم العثور على مستخدم بهذا الآي دي');
-        setCpLoading(false);
-        return;
-      }
-
-      const targetUserDoc = querySnapshot.docs[0];
-      
-      if (targetUserDoc.id === user.uid) {
-        alert('لا يمكنك إرسال طلب لنفسك');
-        setCpLoading(false);
-        return;
-      }
-
-      // Deduct diamonds and set CP for sender
-      await updateDoc(userRef, { 
-        diamonds: userData!.diamonds - config.price,
-        cpPartnerId: targetUserDoc.id,
-        cpPartnerName: targetUserDoc.data().displayName || 'مستخدم',
-        cpPartnerAvatar: targetUserDoc.data().photoURL || '',
-        equippedCpFrame: config.frameUrl,
-        cpBackground: config.backgroundUrl
-      });
-
-      // Set CP for receiver
-      await updateDoc(targetUserDoc.ref, {
-        cpPartnerId: user.uid,
-        cpPartnerName: userData?.displayName || 'مستخدم',
-        cpPartnerAvatar: userData?.photoURL || '',
-        equippedCpFrame: config.frameUrl,
-        cpBackground: config.backgroundUrl
-      });
-
-      // Create CP Request record (optional, for history)
-      await setDoc(doc(collection(db, 'cp_requests')), {
-        senderId: user.uid,
-        senderName: userData?.displayName || 'مستخدم',
-        senderAvatar: userData?.photoURL || '',
-        receiverId: targetUserDoc.id,
-        receiverName: targetUserDoc.data().displayName || 'مستخدم',
-        receiverAvatar: targetUserDoc.data().photoURL || '',
-        status: 'accepted', // Auto-accepted as requested
-        createdAt: new Date().toISOString(),
-        frameUrl: config.frameUrl,
-        backgroundUrl: config.backgroundUrl
-      });
-
-      alert('تم إنشاء الـ CP بنجاح! تم تطبيق الإطار لكلا الحسابين.');
-      setShowCreateCPModal(false);
-      setTargetCpId('');
-    } catch (error: any) {
-      alert('خطأ: ' + error.message);
-    } finally {
-      setCpLoading(false);
-    }
-  };
+  }, [showRankingModal, showCPModal, showSearchModal]);
 
   useEffect(() => {
     if (showCPModal) {
@@ -328,14 +247,20 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       {showRankingModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex flex-col justify-end">
           <div className="absolute inset-0" onClick={() => setShowRankingModal(false)}></div>
-          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10 overflow-hidden">
+            {rankingBackgrounds.wealthRanking && (
+              <div className="absolute inset-0 z-0">
+                <img src={rankingBackgrounds.wealthRanking} className="w-full h-full object-cover opacity-20" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/50 to-white"></div>
+              </div>
+            )}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between relative z-10 bg-white/80 backdrop-blur-sm">
               <h2 className="text-lg font-bold text-gray-800">تصنيف الداعمين (اليومي)</h2>
               <button onClick={() => setShowRankingModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 relative z-10">
               {topSupporters.map((user, idx) => (
                 <div key={user.id} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-100 text-yellow-600' : idx === 1 ? 'bg-gray-200 text-gray-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
@@ -363,95 +288,62 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       {showCPModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex flex-col justify-end">
           <div className="absolute inset-0" onClick={() => setShowCPModal(false)}></div>
-          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10 overflow-hidden">
+            {rankingBackgrounds.cpRanking && (
+              <div className="absolute inset-0 z-0">
+                <img src={rankingBackgrounds.cpRanking} className="w-full h-full object-cover opacity-20" />
+                <div className="absolute inset-0 bg-gradient-to-b from-white/50 to-white"></div>
+              </div>
+            )}
+            <div className="p-4 border-b border-pink-100 flex items-center justify-between relative z-10 bg-white/80 backdrop-blur-sm">
               <h2 className="text-lg font-bold text-gray-800">أفضل الثنائيات (CP)</h2>
               <button onClick={() => setShowCPModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-10">
               {cpList.map((cp, idx) => (
-                <div key={cp.id} className="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-2xl border border-pink-100 flex items-center justify-between relative overflow-hidden">
-                  <div className="absolute top-0 right-0 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+                <div key={cp.id} className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-pink-200 flex items-center justify-between relative overflow-hidden shadow-sm">
+                  <div className="absolute top-0 right-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 shadow-sm">
                     #{idx + 1}
                   </div>
                   
                   {/* Sender */}
-                  <div className="flex flex-col items-center gap-2 z-10 w-1/3">
+                  <div className="flex flex-col items-center gap-2 z-10 w-1/3 mt-2">
                     <div className="relative">
-                      <img src={cp.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.senderId}`} className="w-14 h-14 rounded-full object-cover border-2 border-pink-300" />
-                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] max-w-none object-contain pointer-events-none" />}
+                      <img src={cp.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.senderId}`} className="w-16 h-16 rounded-full object-cover border-2 border-pink-300 shadow-sm" />
+                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] max-w-none object-contain pointer-events-none" />}
                     </div>
-                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full">{cp.senderName}</p>
+                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full mt-1">{cp.senderName}</p>
                   </div>
 
                   {/* Heart Icon */}
-                  <div className="flex flex-col items-center justify-center z-10">
-                    <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center text-pink-500 animate-pulse">
-                      <Users size={16} />
+                  <div className="flex flex-col items-center justify-center z-10 px-2">
+                    <div className="w-10 h-10 bg-gradient-to-br from-pink-100 to-rose-100 rounded-full flex items-center justify-center text-pink-500 animate-pulse shadow-inner border border-pink-200">
+                      <Heart size={20} className="text-pink-500 fill-pink-500" />
                     </div>
                   </div>
 
                   {/* Receiver */}
-                  <div className="flex flex-col items-center gap-2 z-10 w-1/3">
+                  <div className="flex flex-col items-center gap-2 z-10 w-1/3 mt-2">
                     <div className="relative">
-                      <img src={cp.receiverAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.receiverId}`} className="w-14 h-14 rounded-full object-cover border-2 border-pink-300" />
-                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] max-w-none object-contain pointer-events-none" />}
+                      <img src={cp.receiverAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.receiverId}`} className="w-16 h-16 rounded-full object-cover border-2 border-pink-300 shadow-sm" />
+                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] max-w-none object-contain pointer-events-none" />}
                     </div>
-                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full">{cp.receiverName}</p>
+                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full mt-1">{cp.receiverName}</p>
                   </div>
 
                   {/* Background if any */}
                   {cp.backgroundUrl && (
-                    <div className="absolute inset-0 opacity-20 pointer-events-none">
+                    <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply">
                       <img src={cp.backgroundUrl} className="w-full h-full object-cover" />
                     </div>
                   )}
                 </div>
               ))}
               {cpList.length === 0 && (
-                <div className="text-center text-gray-500 py-10">لا توجد ثنائيات حالياً</div>
+                <div className="text-center text-gray-500 py-10 bg-white/50 rounded-2xl backdrop-blur-sm">لا توجد ثنائيات حالياً</div>
               )}
-            </div>
-            <div className="p-4 border-t border-gray-100">
-              <button 
-                onClick={() => setShowCreateCPModal(true)}
-                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
-              >
-                إنشاء ارتباط (CP) جديد
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create CP Modal */}
-      {showCreateCPModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm relative">
-            <button onClick={() => setShowCreateCPModal(false)} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600">
-              <X size={20} />
-            </button>
-            <h3 className="text-lg font-bold mb-4 text-center">طلب ارتباط (CP)</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الآي دي الخاص بالشريك</label>
-                <input
-                  type="text"
-                  value={targetCpId}
-                  onChange={e => setTargetCpId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl font-mono text-center"
-                  placeholder="أدخل الآي دي..."
-                />
-              </div>
-              <button 
-                onClick={handleCPRequest}
-                disabled={cpLoading || !targetCpId}
-                className={`w-full py-3 rounded-xl font-bold text-white transition ${cpLoading || !targetCpId ? 'bg-gray-300' : 'bg-gradient-to-r from-pink-500 to-rose-500 hover:shadow-lg'}`}
-              >
-                {cpLoading ? 'جاري الإرسال...' : 'إرسال الطلب'}
-              </button>
             </div>
           </div>
         </div>
