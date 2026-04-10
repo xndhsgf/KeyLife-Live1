@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Heart, MessageCircle, Share2, Award, Plus, Link as LinkIcon, X, Send, Loader2 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function DiscoverPage() {
