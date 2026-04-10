@@ -112,7 +112,7 @@ export default function AdminDashboard() {
           <TabCard onClick={() => setActiveTab('myAccount')} icon={<Users size={24} />} label="حسابي (المدير)" />
           <TabCard onClick={() => setActiveTab('reset')} icon={<RefreshCw size={24} />} label="إعادة تعيين الحساب" />
           <TabCard onClick={() => setActiveTab('users')} icon={<List size={24} />} label="سجلات الدخول" />
-          <TabCard onClick={() => setActiveTab('active_rooms')} icon={<Radio size={24} />} label="الغرف النشطة" />
+          <TabCard onClick={() => setActiveTab('active_rooms')} icon={<Radio size={24} />} label="الغرف المتصلة (النشطة)" />
           <TabCard onClick={() => setActiveTab('app_settings')} icon={<Settings size={24} />} label="إعدادات التطبيق" />
         </div>
       </div>

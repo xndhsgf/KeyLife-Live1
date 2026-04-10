@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Radio, Trash2, Users } from 'lucide-react';
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { Radio, Trash2, Users, AlertTriangle } from 'lucide-react';
 
 export default function ActiveRoomsTab() {
   const [rooms, setRooms] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'rooms'));
@@ -23,13 +24,54 @@ export default function ActiveRoomsTab() {
     }
   };
 
+  const handleDeleteAllRooms = async () => {
+    if (!confirm('تحذير خطير: هل أنت متأكد من إغلاق وحذف جميع الغرف النشطة حالياً؟ سيتم طرد جميع المستخدمين منها.')) return;
+    
+    setLoading(true);
+    try {
+      const roomsRef = collection(db, 'rooms');
+      const querySnapshot = await getDocs(roomsRef);
+      
+      const batch = writeBatch(db);
+      let count = 0;
+      
+      querySnapshot.forEach((roomDoc) => {
+        batch.delete(roomDoc.ref);
+        count++;
+      });
+      
+      if (count > 0) {
+        await batch.commit();
+        alert(`تم إغلاق وحذف ${count} غرفة بنجاح.`);
+      } else {
+        alert('لا توجد غرف نشطة حالياً لحذفها.');
+      }
+    } catch (error: any) {
+      alert('خطأ أثناء حذف الغرف: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2">
-          <Radio className="text-purple-600" size={20} />
-          الغرف النشطة (المعلقة)
-        </h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Radio className="text-purple-600" size={20} />
+            الغرف المتصلة (النشطة)
+          </h2>
+          <button
+            onClick={handleDeleteAllRooms}
+            disabled={loading || rooms.length === 0}
+            className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition ${
+              rooms.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-600 hover:bg-red-200'
+            }`}
+          >
+            <AlertTriangle size={16} />
+            حذف وإغلاق جميع الغرف
+          </button>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {rooms.map((room) => (

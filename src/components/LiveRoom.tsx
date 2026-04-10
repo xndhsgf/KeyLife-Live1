@@ -167,6 +167,10 @@ export default function LiveRoom({
         
         setRoomBackground(data.backgroundUrl || null);
         setRoom(data);
+      } else {
+        // Room was deleted
+        alert('تم إغلاق الغرفة.');
+        onClose();
       }
     });
 

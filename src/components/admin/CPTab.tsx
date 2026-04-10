@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { Save, Image as ImageIcon, Gift } from 'lucide-react';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, deleteField } from 'firebase/firestore';
+import { Save, Image as ImageIcon, Gift, Trash2 } from 'lucide-react';
 
 export default function CPTab() {
   const [config, setConfig] = useState({
@@ -65,9 +65,60 @@ export default function CPTab() {
     }
   };
 
+  const handleResetAllCPs = async () => {
+    if (!confirm('هل أنت متأكد من حذف جميع علاقات الـ CP بين جميع المستخدمين؟ لا يمكن التراجع عن هذا الإجراء!')) return;
+    
+    setLoading(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const querySnapshot = await getDocs(usersRef);
+      
+      const batch = writeBatch(db);
+      let count = 0;
+      
+      querySnapshot.forEach((userDoc) => {
+        const data = userDoc.data();
+        if (data.cpPartnerId) {
+          batch.update(userDoc.ref, {
+            cpPartnerId: deleteField(),
+            cpPartnerName: deleteField(),
+            cpPartnerAvatar: deleteField(),
+            equippedCpFrame: deleteField(),
+            cpBackground: deleteField(),
+            cpLevel: deleteField(),
+            cpPoints: deleteField()
+          });
+          count++;
+        }
+      });
+      
+      if (count > 0) {
+        await batch.commit();
+        alert(`تم حذف علاقات الـ CP لـ ${count} مستخدم بنجاح.`);
+      } else {
+        alert('لا يوجد مستخدمين لديهم علاقة CP حالياً.');
+      }
+    } catch (error: any) {
+      alert('خطأ أثناء حذف علاقات الـ CP: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
-      <h3 className="text-lg font-bold text-gray-800 mb-6">إعدادات الـ CP (الكابلز)</h3>
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-bold text-gray-800">إعدادات الـ CP (الكابلز)</h3>
+        <button
+          onClick={handleResetAllCPs}
+          disabled={loading}
+          className="bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition"
+        >
+          <Trash2 size={16} />
+          حذف جميع علاقات الـ CP
+        </button>
+      </div>
+      
       <form onSubmit={handleSave} className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">هدية الـ CP (من صندوق الهدايا)</label>
