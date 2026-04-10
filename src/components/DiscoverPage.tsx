@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export default function DiscoverPage() {
   const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCommentsModal, setShowCommentsModal] = useState<string | null>(null);
@@ -18,6 +19,19 @@ export default function DiscoverPage() {
   // Comments State
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      const unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().role === 'admin') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      });
+      return () => unsubUser();
+    }
+  }, [user]);
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
@@ -109,6 +123,17 @@ export default function DiscoverPage() {
     }
   };
 
+  const handleDeletePost = async (postId: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا المنشور؟')) {
+      try {
+        await deleteDoc(doc(db, 'posts', postId));
+      } catch (error) {
+        console.error("Error deleting post:", error);
+        alert("حدث خطأ أثناء حذف المنشور");
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-full bg-gray-50 relative pb-20">
       {/* Header */}
@@ -143,6 +168,15 @@ export default function DiscoverPage() {
                       </p>
                     </div>
                   </div>
+                  {(isAdmin || (user && user.uid === post.authorId)) && (
+                    <button 
+                      onClick={() => handleDeletePost(post.id)}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-full transition"
+                      title="حذف المنشور"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Content */}

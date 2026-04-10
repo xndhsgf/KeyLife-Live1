@@ -108,14 +108,16 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
     <div className="flex flex-col min-h-full bg-gray-50">
       {/* Profile Header */}
       <div className="bg-white pt-8 pb-6 px-4 rounded-b-3xl shadow-sm relative">
-        <div className="absolute top-4 left-4 flex gap-3 text-gray-600">
+        <div className="absolute top-4 left-4 flex gap-2 text-gray-600 z-10">
           {isEditing ? (
             <>
-              <button onClick={handleSave} disabled={isSaving} className="text-green-500 hover:bg-green-50 p-1 rounded-full transition" title="حفظ">
-                <Check size={22} />
+              <button onClick={handleSave} disabled={isSaving} className="bg-green-500 text-white hover:bg-green-600 px-4 py-1.5 rounded-full transition text-sm font-bold flex items-center gap-1 shadow-sm">
+                <Check size={16} />
+                {isSaving ? 'جاري الحفظ...' : 'حفظ البيانات'}
               </button>
-              <button onClick={handleCancel} disabled={isSaving} className="text-gray-500 hover:bg-gray-50 p-1 rounded-full transition" title="إلغاء">
-                <X size={22} />
+              <button onClick={handleCancel} disabled={isSaving} className="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1.5 rounded-full transition text-sm font-bold flex items-center gap-1 shadow-sm">
+                <X size={16} />
+                إلغاء
               </button>
             </>
           ) : (
