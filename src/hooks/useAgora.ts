@@ -113,6 +113,7 @@ export function useAgora(roomId: string, userId: string | undefined, isOnMic: bo
     isMuted,
     toggleMute,
     remoteUsers,
-    speakingUsers
+    speakingUsers,
+    client
   };
 }

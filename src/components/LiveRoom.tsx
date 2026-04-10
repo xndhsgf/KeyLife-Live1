@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Users, Gift, Mic, MicOff, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc, increment, deleteDoc, where, getDocs, writeBatch } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { motion, AnimatePresence } from 'motion/react';
 import { calculateLevel, getLevelColor } from '../lib/levels';
 import BackgroundSelector from './BackgroundSelector';
@@ -10,6 +11,7 @@ import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButt
 import GameCenterModal from './games/GameCenterModal';
 import PrivateChat from './PrivateChat';
 import { useAgora } from '../hooks/useAgora';
+import AgoraRTC from 'agora-rtc-sdk-ng';
 
 export default function LiveRoom({ 
   roomId, 
@@ -98,13 +100,43 @@ export default function LiveRoom({
     message: '',
     onConfirm: () => {}
   });
+  const [isUploadingMusic, setIsUploadingMusic] = useState(false);
+  const [localMusicUrl, setLocalMusicUrl] = useState<string | null>(null);
+  const [localMusicTrack, setLocalMusicTrack] = useState<any>(null);
+  const localAudioRef = useRef<HTMLAudioElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const mountTime = useRef(Date.now());
   const entranceTriggeredRef = useRef(false);
 
   const isOnMic = !!mics.find(m => m.userId === user?.uid);
-  const { isJoined, isMuted, toggleMute, remoteUsers, speakingUsers } = useAgora(roomId, user?.uid, isOnMic);
+  const { isJoined, isMuted, toggleMute, remoteUsers, speakingUsers, client } = useAgora(roomId, user?.uid, isOnMic);
+
+  useEffect(() => {
+    if (room?.currentMusic?.isPlaying === false) {
+      if (localMusicTrack && client) {
+        client.unpublish(localMusicTrack).catch(console.error);
+        localMusicTrack.close();
+        setLocalMusicTrack(null);
+      }
+      if (localMusicUrl) {
+        URL.revokeObjectURL(localMusicUrl);
+        setLocalMusicUrl(null);
+      }
+    }
+  }, [room?.currentMusic?.isPlaying, client, localMusicTrack, localMusicUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (localMusicTrack && client) {
+        client.unpublish(localMusicTrack).catch(console.error);
+        localMusicTrack.close();
+      }
+      if (localMusicUrl) {
+        URL.revokeObjectURL(localMusicUrl);
+      }
+    };
+  }, [localMusicTrack, client, localMusicUrl]);
 
   useEffect(() => {
     const handleBack = () => {
@@ -585,6 +617,24 @@ export default function LiveRoom({
     })();
   };
 
+  const handleLocalMusicPlay = async () => {
+    if (!client || !localAudioRef.current) return;
+    try {
+      const audioEl = localAudioRef.current as any;
+      const stream = audioEl.captureStream ? audioEl.captureStream() : audioEl.mozCaptureStream ? audioEl.mozCaptureStream() : null;
+      if (stream) {
+        const track = stream.getAudioTracks()[0];
+        if (track) {
+          const customTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: track });
+          setLocalMusicTrack(customTrack);
+          await client.publish(customTrack);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to publish local music track", e);
+    }
+  };
+
   const handleSendGift = async () => {
     if (selectedReceivers.length === 0) return alert('الرجاء تحديد شخص لإرسال الهدية له');
     if (!selectedGift) return alert('الرجاء تحديد هدية');
@@ -875,6 +925,53 @@ export default function LiveRoom({
               </button>
             </div>
           </div>
+
+          {/* Music Player */}
+          {isUploadingMusic && (
+            <div className="px-4 mb-2">
+              <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 flex items-center gap-3 border border-white/10">
+                <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin"></div>
+                <div className="text-xs font-bold text-white">جاري رفع الموسيقى...</div>
+              </div>
+            </div>
+          )}
+          {room?.currentMusic?.isPlaying && (
+            <div className="px-4 mb-2">
+              <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 flex items-center gap-3 border border-white/10">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center animate-[spin_3s_linear_infinite]">
+                  <Music size={14} className="text-white" />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-xs font-bold text-white truncate">{room.currentMusic.name}</div>
+                  <div className="text-[10px] text-gray-400 truncate">بواسطة: {room.currentMusic.playedBy}</div>
+                </div>
+                {(room.hostId === user?.uid || userData?.role === 'admin') && (
+                  <button 
+                    onClick={async () => {
+                      await updateDoc(doc(db, 'rooms', roomId), {
+                        'currentMusic.isPlaying': false
+                      });
+                    }}
+                    className="p-1.5 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500/40 transition"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                {!room.currentMusic.isLocalStream && room.currentMusic.url && (
+                  <audio src={room.currentMusic.url} autoPlay loop />
+                )}
+                {localMusicUrl && (
+                  <audio 
+                    ref={localAudioRef}
+                    src={localMusicUrl} 
+                    autoPlay 
+                    loop 
+                    onPlay={handleLocalMusicPlay}
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Seats Grid */}
           <div className="px-4 py-2 shrink-0">
@@ -1450,7 +1547,35 @@ export default function LiveRoom({
                   { icon: appIcons.settingsIcon ? <img src={appIcons.settingsIcon} className="w-6 h-6 object-contain" /> : <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
                   ...(room.hostId === user?.uid || userData?.role === 'admin' ? [
                     { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
-                    { icon: appIcons.musicIcon ? <img src={appIcons.musicIcon} className="w-6 h-6 object-contain" /> : <Music />, label: 'موسيقى', color: 'text-green-400' },
+                    { icon: appIcons.musicIcon ? <img src={appIcons.musicIcon} className="w-6 h-6 object-contain" /> : <Music />, label: 'موسيقى', color: 'text-green-400', action: () => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'audio/*';
+                      input.onchange = async (e: any) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        
+                        try {
+                          const url = URL.createObjectURL(file);
+                          setLocalMusicUrl(url);
+                          setShowAdminTools(false);
+                          
+                          await updateDoc(doc(db, 'rooms', roomId), {
+                            currentMusic: {
+                              name: file.name,
+                              isPlaying: true,
+                              startTime: Date.now(),
+                              playedBy: user?.displayName || 'مستخدم',
+                              isLocalStream: true
+                            }
+                          });
+                        } catch (error) {
+                          console.error('Error starting music:', error);
+                          alert('حدث خطأ أثناء تشغيل الموسيقى');
+                        }
+                      };
+                      input.click();
+                    } },
                     { icon: appIcons.usersIcon ? <img src={appIcons.usersIcon} className="w-6 h-6 object-contain" /> : <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
                     { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
                     { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
