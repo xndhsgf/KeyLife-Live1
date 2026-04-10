@@ -13,15 +13,25 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [showCPModal, setShowCPModal] = useState(false);
+  const [showCreateCPModal, setShowCreateCPModal] = useState(false);
   const [topSupporters, setTopSupporters] = useState<any[]>([]);
+  const [cpList, setCpList] = useState<any[]>([]);
   const [targetCpId, setTargetCpId] = useState('');
   const [cpLoading, setCpLoading] = useState(false);
   const [appName, setAppName] = useState('Cocco');
+  const [navIcons, setNavIcons] = useState<any>({});
+  
+  // Search state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState<any>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, 'settings', 'app_config'), (doc) => {
-      if (doc.exists() && doc.data().appName) {
-        setAppName(doc.data().appName);
+      if (doc.exists()) {
+        if (doc.data().appName) setAppName(doc.data().appName);
+        if (doc.data().navIcons) setNavIcons(doc.data().navIcons);
       }
     });
     return () => unsubConfig();
@@ -31,12 +41,14 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
     const handleBack = () => {
       if (showRankingModal) { setShowRankingModal(false); return true; }
       if (showCPModal) { setShowCPModal(false); return true; }
+      if (showCreateCPModal) { setShowCreateCPModal(false); return true; }
+      if (showSearchModal) { setShowSearchModal(false); return true; }
       return false;
     };
 
     registerBackHandler(handleBack);
     return () => unregisterBackHandler(handleBack);
-  }, [showRankingModal, showCPModal]);
+  }, [showRankingModal, showCPModal, showCreateCPModal, showSearchModal]);
 
   const handleCPRequest = async () => {
     if (!user || !targetCpId) return;
@@ -109,7 +121,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       });
 
       alert('تم إنشاء الـ CP بنجاح! تم تطبيق الإطار لكلا الحسابين.');
-      setShowCPModal(false);
+      setShowCreateCPModal(false);
       setTargetCpId('');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -118,6 +130,38 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
     }
   };
 
+  useEffect(() => {
+    if (showCPModal) {
+      const q = query(collection(db, 'cp_requests'), where('status', '==', 'accepted'), orderBy('createdAt', 'desc'), limit(50));
+      const unsub = onSnapshot(q, (snapshot) => {
+        setCpList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+      return () => unsub();
+    }
+  }, [showCPModal]);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    setSearchResult(null);
+    try {
+      const q = query(collection(db, 'users'), where('numericId', '==', searchQuery.trim()));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setSearchResult({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
+      } else {
+        setSearchResult('not_found');
+      }
+    } catch (error) {
+      console.error("Error searching:", error);
+      alert("حدث خطأ أثناء البحث");
+    } finally {
+      setIsSearching(false);
+    }
+  };
   useEffect(() => {
     if (showRankingModal) {
       const q = query(collection(db, 'users'), orderBy('dailySupport', 'desc'), limit(50));
@@ -161,7 +205,9 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-gray-800">{appName}</h1>
           <div className="flex gap-3 text-gray-600">
-            <Search size={24} />
+            <button onClick={() => setShowSearchModal(true)} className="hover:text-purple-600 transition">
+              <Search size={24} />
+            </button>
             <Bell size={24} />
           </div>
         </div>
@@ -220,8 +266,8 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
         {/* Categories */}
         <div className="flex gap-4">
           <div onClick={() => setShowRankingModal(true)} className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
-              <Flame size={20} />
+            <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 overflow-hidden">
+              {navIcons.homeTopSupporters ? <img src={navIcons.homeTopSupporters} alt="ثروة" className="w-full h-full object-cover" /> : <Flame size={20} />}
             </div>
             <div>
               <p className="text-sm font-bold">ثروة</p>
@@ -229,8 +275,8 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
             </div>
           </div>
           <div onClick={() => setShowCPModal(true)} className="flex-1 bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow">
-            <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500">
-              <Users size={20} />
+            <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 overflow-hidden">
+              {navIcons.homeCP ? <img src={navIcons.homeCP} alt="زوجين" className="w-full h-full object-cover" /> : <Users size={20} />}
             </div>
             <div>
               <p className="text-sm font-bold">زوجين</p>
@@ -313,11 +359,78 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
           </div>
         </div>
       )}
-      {/* CP Modal */}
+      {/* CP List Modal */}
       {showCPModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex flex-col justify-end">
+          <div className="absolute inset-0" onClick={() => setShowCPModal(false)}></div>
+          <div className="bg-white rounded-t-3xl h-[80vh] flex flex-col relative z-10">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">أفضل الثنائيات (CP)</h2>
+              <button onClick={() => setShowCPModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {cpList.map((cp, idx) => (
+                <div key={cp.id} className="bg-gradient-to-r from-pink-50 to-purple-50 p-4 rounded-2xl border border-pink-100 flex items-center justify-between relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg z-10">
+                    #{idx + 1}
+                  </div>
+                  
+                  {/* Sender */}
+                  <div className="flex flex-col items-center gap-2 z-10 w-1/3">
+                    <div className="relative">
+                      <img src={cp.senderAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.senderId}`} className="w-14 h-14 rounded-full object-cover border-2 border-pink-300" />
+                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] max-w-none object-contain pointer-events-none" />}
+                    </div>
+                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full">{cp.senderName}</p>
+                  </div>
+
+                  {/* Heart Icon */}
+                  <div className="flex flex-col items-center justify-center z-10">
+                    <div className="w-8 h-8 bg-pink-100 rounded-full flex items-center justify-center text-pink-500 animate-pulse">
+                      <Users size={16} />
+                    </div>
+                  </div>
+
+                  {/* Receiver */}
+                  <div className="flex flex-col items-center gap-2 z-10 w-1/3">
+                    <div className="relative">
+                      <img src={cp.receiverAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${cp.receiverId}`} className="w-14 h-14 rounded-full object-cover border-2 border-pink-300" />
+                      {cp.frameUrl && <img src={cp.frameUrl} className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] max-w-none object-contain pointer-events-none" />}
+                    </div>
+                    <p className="text-xs font-bold text-gray-800 text-center truncate w-full">{cp.receiverName}</p>
+                  </div>
+
+                  {/* Background if any */}
+                  {cp.backgroundUrl && (
+                    <div className="absolute inset-0 opacity-20 pointer-events-none">
+                      <img src={cp.backgroundUrl} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {cpList.length === 0 && (
+                <div className="text-center text-gray-500 py-10">لا توجد ثنائيات حالياً</div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100">
+              <button 
+                onClick={() => setShowCreateCPModal(true)}
+                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+              >
+                إنشاء ارتباط (CP) جديد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create CP Modal */}
+      {showCreateCPModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm relative">
-            <button onClick={() => setShowCPModal(false)} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600">
+            <button onClick={() => setShowCreateCPModal(false)} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600">
               <X size={20} />
             </button>
             <h3 className="text-lg font-bold mb-4 text-center">طلب ارتباط (CP)</h3>
@@ -340,6 +453,69 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                 {cpLoading ? 'جاري الإرسال...' : 'إرسال الطلب'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Modal */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col animate-slide-up">
+          <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+            <button onClick={() => setShowSearchModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-600">
+              <X size={20} />
+            </button>
+            <form onSubmit={handleSearch} className="flex-1 relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ابحث عن طريق الآي دي (ID)..."
+                className="w-full bg-gray-100 rounded-full px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                dir="auto"
+              />
+              <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-600">
+                <Search size={18} />
+              </button>
+            </form>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            {isSearching ? (
+              <div className="flex justify-center py-10">
+                <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
+              </div>
+            ) : searchResult === 'not_found' ? (
+              <div className="text-center text-gray-500 py-10">
+                لم يتم العثور على مستخدم بهذا الآي دي
+              </div>
+            ) : searchResult ? (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center">
+                <div className="relative mb-4">
+                  <img src={searchResult.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${searchResult.id}`} className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg" />
+                  {searchResult.equippedCpFrame && (
+                    <img src={searchResult.equippedCpFrame} className="absolute -inset-4 w-[calc(100%+32px)] h-[calc(100%+32px)] max-w-none object-contain pointer-events-none" />
+                  )}
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-1">{searchResult.displayName || 'مستخدم'}</h3>
+                <p className="text-sm text-gray-500 font-mono mb-4">ID: {searchResult.numericId}</p>
+                
+                <div className="flex gap-4 w-full">
+                  <div className="flex-1 bg-purple-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-purple-600 font-bold mb-1">المستوى</p>
+                    <p className="text-lg font-black text-purple-700">{searchResult.level || 1}</p>
+                  </div>
+                  <div className="flex-1 bg-pink-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-pink-600 font-bold mb-1">الدعم</p>
+                    <p className="text-lg font-black text-pink-700">{searchResult.totalSupport || 0}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-10">
+                <Search size={48} className="mx-auto mb-4 opacity-20" />
+                <p>أدخل الآي دي للبحث عن مستخدم</p>
+              </div>
+            )}
           </div>
         </div>
       )}

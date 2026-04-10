@@ -1142,33 +1142,33 @@ export default function LiveRoom({
         {showGiftModal && (
           <div className="absolute inset-0 z-50 flex flex-col justify-end">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowGiftModal(false)}></div>
-            <div className="bg-black/70 backdrop-blur-xl rounded-t-3xl relative z-10 border-t border-white/10 h-[65%] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+            <div className="bg-black/80 backdrop-blur-xl rounded-t-3xl relative z-10 border-t border-white/10 h-[55%] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
               {/* Header */}
-              <div className="p-4 border-b border-white/10 flex justify-between items-center bg-transparent sticky top-0 z-20">
-                <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/5">
-                  <span className="text-yellow-400 font-bold text-sm">{userDiamonds}</span>
-                  <span className="text-xs text-gray-300">💎 رصيدك</span>
+              <div className="p-3 border-b border-white/10 flex justify-between items-center bg-transparent sticky top-0 z-20">
+                <div className="flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-full border border-white/5">
+                  <span className="text-yellow-400 font-bold text-xs">{userDiamonds}</span>
+                  <span className="text-[10px] text-gray-300">💎 رصيدك</span>
                 </div>
-                <h3 className="font-bold text-white text-lg drop-shadow-md">صندوق الهدايا</h3>
-                <button onClick={() => setShowGiftModal(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition text-white"><X size={20} /></button>
+                <h3 className="font-bold text-white text-base drop-shadow-md">صندوق الهدايا</h3>
+                <button onClick={() => setShowGiftModal(false)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-full transition text-white"><X size={18} /></button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 hide-scrollbar">
+              <div className="flex-1 overflow-y-auto p-3 hide-scrollbar">
                 {/* Receiver Selection */}
-                <div className="mb-5">
-                  <div className="flex justify-between items-center mb-3">
-                    <p className="text-sm text-gray-300 font-bold">إرسال إلى:</p>
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-xs text-gray-300 font-bold">إرسال إلى:</p>
                     {selectedReceivers.length > 0 && (
                       <button 
                         onClick={() => setSelectedReceivers([])}
-                        className="text-[10px] text-red-400 font-bold flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20"
+                        className="text-[9px] text-red-400 font-bold flex items-center gap-1 bg-red-500/10 px-1.5 py-0.5 rounded-md border border-red-500/20"
                       >
-                        <X size={12} />
+                        <X size={10} />
                         إلغاء الكل
                       </button>
                     )}
                   </div>
-                  <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+                  <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
                     <button 
                       onClick={() => {
                         const allUserIds = mics.filter(m => m.userId).map(m => m.userId!);
@@ -1178,10 +1178,10 @@ export default function LiveRoom({
                           setSelectedReceivers(allUserIds);
                         }
                       }}
-                      className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceivers.length > 0 && selectedReceivers.length === mics.filter(m => m.userId).length ? 'border-yellow-500 bg-yellow-500/20 scale-105' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                      className={`flex flex-col items-center gap-1.5 min-w-[55px] p-1.5 rounded-2xl border transition-all ${selectedReceivers.length > 0 && selectedReceivers.length === mics.filter(m => m.userId).length ? 'border-yellow-500 bg-yellow-500/20 scale-105' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                     >
-                      <div className="w-11 h-11 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50 relative">
-                        <Users size={20} className="text-yellow-500" />
+                      <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center border border-yellow-500/50 relative">
+                        <Users size={18} className="text-yellow-500" />
                         {selectedReceivers.length > 0 && selectedReceivers.length === mics.filter(m => m.userId).length && (
                           <div 
                             onClick={(e) => {
@@ -1190,11 +1190,11 @@ export default function LiveRoom({
                             }}
                             className="absolute -top-1 -left-1 bg-red-500 rounded-full p-0.5 border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
                           >
-                            <X size={10} className="text-white" />
+                            <X size={8} className="text-white" />
                           </div>
                         )}
                       </div>
-                      <span className="text-[10px] font-bold text-gray-200">الكل</span>
+                      <span className="text-[9px] font-bold text-gray-200">الكل</span>
                     </button>
 
                     {mics.filter(m => m.userId).map(m => (
@@ -1207,14 +1207,14 @@ export default function LiveRoom({
                             setSelectedReceivers(prev => [...prev, m.userId!]);
                           }
                         }}
-                        className={`flex flex-col items-center gap-2 min-w-[65px] p-2 rounded-2xl border transition-all ${selectedReceivers.includes(m.userId!) ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
+                        className={`flex flex-col items-center gap-1.5 min-w-[55px] p-1.5 rounded-2xl border transition-all ${selectedReceivers.includes(m.userId!) ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}
                       >
                         <div className="relative">
-                          <img src={m.userAvatar || undefined} className={`w-11 h-11 rounded-full object-cover ${selectedReceivers.includes(m.userId!) ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/50' : ''}`} />
+                          <img src={m.userAvatar || undefined} className={`w-10 h-10 rounded-full object-cover ${selectedReceivers.includes(m.userId!) ? 'ring-2 ring-pink-500 ring-offset-1 ring-offset-black/50' : ''}`} />
                           {selectedReceivers.includes(m.userId!) && (
                             <>
                               <div className="absolute -bottom-1 -right-1 bg-pink-500 rounded-full p-0.5 border border-black/50">
-                                <Check size={10} className="text-white" />
+                                <Check size={8} className="text-white" />
                               </div>
                               <div 
                                 onClick={(e) => {
@@ -1223,40 +1223,40 @@ export default function LiveRoom({
                                 }}
                                 className="absolute -top-1 -left-1 bg-red-500 rounded-full p-0.5 border border-black/50 hover:bg-red-600 transition-colors cursor-pointer"
                               >
-                                <X size={10} className="text-white" />
+                                <X size={8} className="text-white" />
                               </div>
                             </>
                           )}
                         </div>
-                        <span className="text-[10px] font-medium truncate w-full text-center text-gray-200">{m.userName}</span>
+                        <span className="text-[9px] font-medium truncate w-full text-center text-gray-200">{m.userName}</span>
                       </button>
                     ))}
                     {mics.filter(m => m.userId).length === 0 && (
-                      <div className="text-sm text-gray-400 w-full text-center py-4 bg-white/5 rounded-xl border border-white/5">لا يوجد أشخاص على المايكات</div>
+                      <div className="text-xs text-gray-400 w-full text-center py-3 bg-white/5 rounded-xl border border-white/5">لا يوجد أشخاص على المايكات</div>
                     )}
                   </div>
                 </div>
 
                 {/* Gift Categories Tabs */}
-                <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto hide-scrollbar">
+                <div className="flex gap-1.5 mb-3 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto hide-scrollbar">
                   <button 
                     onClick={() => setGiftCategory('classic')}
-                    className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-none px-3 py-1 text-xs font-bold rounded-lg transition-all ${giftCategory === 'classic' ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     هدايا عادية
                   </button>
                   <button 
                     onClick={() => setGiftCategory('lucky')}
-                    className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex-none px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${giftCategory === 'lucky' ? 'bg-gradient-to-r from-yellow-500/30 to-orange-500/30 text-yellow-400 shadow-sm border border-yellow-500/30' : 'text-gray-400 hover:text-gray-200'}`}
                   >
-                    <Star size={14} className={giftCategory === 'lucky' ? 'text-yellow-400' : ''} />
+                    <Star size={12} className={giftCategory === 'lucky' ? 'text-yellow-400' : ''} />
                     هدايا الحظ
                   </button>
                   {giftCategories.map(cat => (
                     <button 
                       key={cat.id}
                       onClick={() => setGiftCategory(cat.id)}
-                      className={`flex-none px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${giftCategory === cat.id ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                      className={`flex-none px-3 py-1 text-xs font-bold rounded-lg transition-all ${giftCategory === cat.id ? 'bg-white/20 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                     >
                       {cat.name}
                     </button>
@@ -1265,72 +1265,72 @@ export default function LiveRoom({
 
                 {/* Gifts Grid */}
                 <div>
-                  <div className="grid grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-4 gap-2">
                     {gifts.filter(g => (g.category || 'classic') === giftCategory).map(gift => (
                       <button 
                         key={gift.id}
                         onClick={() => setSelectedGift(gift)}
-                        className={`rounded-2xl p-2.5 flex flex-col items-center gap-1.5 border transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                        className={`rounded-xl p-2 flex flex-col items-center gap-1 border transition-all ${selectedGift?.id === gift.id ? 'border-pink-500 bg-pink-500/20 scale-105 shadow-[0_0_15px_rgba(236,72,153,0.3)]' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
                       >
-                        <img src={gift.imageUrl || undefined} alt={gift.name} className="w-12 h-12 object-contain drop-shadow-md" />
-                        <span className="text-[9px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
-                        <div className="flex items-center gap-1 text-yellow-400 text-[10px] font-bold bg-black/40 px-2 py-0.5 rounded-full border border-white/5">
+                        <img src={gift.imageUrl || undefined} alt={gift.name} className="w-10 h-10 object-contain drop-shadow-md" />
+                        <span className="text-[8px] font-medium text-gray-300 truncate w-full text-center">{gift.name}</span>
+                        <div className="flex items-center gap-0.5 text-yellow-400 text-[9px] font-bold bg-black/40 px-1.5 py-0.5 rounded-full border border-white/5">
                           {gift.value} 💎
                         </div>
                       </button>
                     ))}
                     {gifts.filter(g => (g.category || 'classic') === giftCategory).length === 0 && (
-                      <div className="col-span-4 text-center text-gray-400 py-8 text-sm bg-white/5 rounded-xl border border-white/5">لا توجد هدايا في هذا القسم</div>
+                      <div className="col-span-4 text-center text-gray-400 py-6 text-xs bg-white/5 rounded-xl border border-white/5">لا توجد هدايا في هذا القسم</div>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Footer / Send Button */}
-              <div className="p-3 bg-black/50 border-t border-white/10 backdrop-blur-md">
-                <div className="flex gap-2 overflow-x-auto hide-scrollbar mb-3 pb-1">
+              <div className="p-2.5 bg-black/60 border-t border-white/10 backdrop-blur-md">
+                <div className="flex gap-1.5 overflow-x-auto hide-scrollbar mb-2 pb-1">
                   {[1, 10, 66, 99, 520, 1314].map(q => (
                     <button
                       key={q}
                       onClick={() => setGiftQuantity(q)}
-                      className={`px-3 py-1 rounded-full text-[10px] font-black transition-all border ${giftQuantity === q ? 'bg-pink-500 text-white border-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.4)]' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+                      className={`px-2.5 py-0.5 rounded-full text-[9px] font-black transition-all border ${giftQuantity === q ? 'bg-pink-500 text-white border-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.4)]' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
                     >
                       x{q}
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex-1">
                     {selectedGift ? (
-                      <div className="flex items-center gap-2 relative group">
-                        <div className="bg-white/10 p-1.5 rounded-xl border border-white/5">
-                          <img src={selectedGift.imageUrl || undefined} className="w-7 h-7 object-contain" />
+                      <div className="flex items-center gap-1.5 relative group">
+                        <div className="bg-white/10 p-1 rounded-lg border border-white/5">
+                          <img src={selectedGift.imageUrl || undefined} className="w-6 h-6 object-contain" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-white">{selectedGift.name}</p>
-                          <p className="text-[10px] text-yellow-400 font-bold">{selectedGift.value} 💎</p>
+                          <p className="text-[10px] font-bold text-white">{selectedGift.name}</p>
+                          <p className="text-[9px] text-yellow-400 font-bold">{selectedGift.value} 💎</p>
                         </div>
                         <button 
                           onClick={() => setSelectedGift(null)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                          className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                         >
-                          <X size={10} />
+                          <X size={8} />
                         </button>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400 font-medium ml-2">لم يتم تحديد هدية</p>
+                      <p className="text-[10px] text-gray-400 font-medium ml-1">لم يتم تحديد هدية</p>
                     )}
                   </div>
                   <button 
                     onClick={handleSendGift}
                     disabled={!selectedGift || selectedReceivers.length === 0 || isSendingGift}
-                    className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 transition-all ${(!selectedGift || selectedReceivers.length === 0 || isSendingGift) ? 'bg-white/10 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 border border-pink-400/50'}`}
+                    className={`px-4 py-2 rounded-full font-bold text-xs flex items-center gap-1.5 transition-all ${(!selectedGift || selectedReceivers.length === 0 || isSendingGift) ? 'bg-white/10 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95 border border-pink-400/50'}`}
                   >
                     {isSendingGift ? (
-                      <span className="animate-pulse text-xs">جاري الإرسال...</span>
+                      <span className="animate-pulse text-[10px]">جاري الإرسال...</span>
                     ) : (
                       <>
-                        <Send size={16} />
+                        <Send size={14} />
                         إرسال الهدية
                       </>
                     )}

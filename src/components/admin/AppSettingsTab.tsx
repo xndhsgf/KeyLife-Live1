@@ -12,7 +12,9 @@ export default function AppSettingsTab() {
     messages: '',
     profile: '',
     discoverLatest: '',
-    discoverVideos: ''
+    discoverVideos: '',
+    homeCP: '',
+    homeTopSupporters: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -162,6 +164,28 @@ export default function AppSettingsTab() {
               type="text"
               value={navIcons.discoverVideos || ''}
               onChange={(e) => handleIconChange('discoverVideos', e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/icon.png"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">أيقونة "زوجين" (في الصفحة الرئيسية)</label>
+            <input
+              type="text"
+              value={navIcons.homeCP || ''}
+              onChange={(e) => handleIconChange('homeCP', e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/icon.png"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">أيقونة "ثروة" (في الصفحة الرئيسية)</label>
+            <input
+              type="text"
+              value={navIcons.homeTopSupporters || ''}
+              onChange={(e) => handleIconChange('homeTopSupporters', e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
               placeholder="https://example.com/icon.png"
               dir="ltr"
