@@ -1,13 +1,146 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Heart, MessageCircle, Share2, Award, Plus, Link as LinkIcon, X, Send, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, Heart, MessageCircle, Share2, Award, Plus, Link as LinkIcon, X, Send, Loader2, Play, Bookmark, Music, Search, Tv } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+
+const VideoPost = ({ post, onLike, onComment, user, isAdmin, onDelete }: any) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const isLiked = user && post.likedBy?.includes(user.uid);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          videoRef.current?.play().catch(() => {});
+          setIsPlaying(true);
+        } else {
+          videoRef.current?.pause();
+          setIsPlaying(false);
+        }
+      },
+      { threshold: 0.6 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const handleShare = () => {
+    const text = `شاهد هذا الفيديو الرائع!\n${post.text || ''}\n${post.imageUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  return (
+    <div ref={containerRef} className="w-full h-full snap-start relative bg-black flex items-center justify-center overflow-hidden">
+      <video
+        ref={videoRef}
+        src={post.imageUrl}
+        className="w-full h-full object-cover absolute inset-0"
+        loop
+        playsInline
+        onClick={togglePlay}
+      />
+      {!isPlaying && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="bg-black/40 rounded-full p-4 backdrop-blur-sm">
+            <Play className="text-white w-10 h-10 ml-1" fill="white" />
+          </div>
+        </div>
+      )}
+      
+      {/* Right Actions */}
+      <div className="absolute right-2 bottom-20 flex flex-col items-center gap-5 z-20">
+        <div className="relative mb-2">
+          {post.authorAvatar?.toLowerCase().includes('.mp4') ? (
+            <video src={post.authorAvatar} autoPlay loop muted playsInline className="w-12 h-12 rounded-full border-2 border-white object-cover" />
+          ) : (
+            <img src={post.authorAvatar} className="w-12 h-12 rounded-full border-2 border-white object-cover" referrerPolicy="no-referrer" />
+          )}
+          <button className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-red-500 rounded-full p-0.5">
+            <Plus size={14} className="text-white" />
+          </button>
+        </div>
+        
+        <button onClick={() => onLike(post.id, post.likedBy || [])} className="flex flex-col items-center gap-1">
+          <Heart size={36} className={isLiked ? "text-red-500" : "text-white"} fill={isLiked ? "currentColor" : "white"} fillOpacity={isLiked ? 1 : 0.9} />
+          <span className="text-white text-xs font-bold drop-shadow-md">{post.likesCount || 0}</span>
+        </button>
+
+        <button onClick={() => onComment(post.id)} className="flex flex-col items-center gap-1">
+          <MessageCircle size={36} className="text-white" fill="white" fillOpacity={0.9} />
+          <span className="text-white text-xs font-bold drop-shadow-md">{post.commentsCount || 0}</span>
+        </button>
+
+        <button onClick={() => setIsBookmarked(!isBookmarked)} className="flex flex-col items-center gap-1">
+          <Bookmark size={36} className={isBookmarked ? "text-yellow-400" : "text-white"} fill={isBookmarked ? "currentColor" : "white"} fillOpacity={0.9} />
+          <span className="text-white text-xs font-bold drop-shadow-md">حفظ</span>
+        </button>
+
+        <button onClick={handleShare} className="flex flex-col items-center gap-1">
+          <Share2 size={36} className="text-white" fill="white" fillOpacity={0.9} />
+          <span className="text-white text-xs font-bold drop-shadow-md">مشاركة</span>
+        </button>
+
+        <div className="mt-2 animate-[spin_4s_linear_infinite]">
+          <div className="w-12 h-12 rounded-full bg-gray-800 border-[7px] border-gray-900 flex items-center justify-center">
+            <img src={post.authorAvatar} className="w-5 h-5 rounded-full object-cover" referrerPolicy="no-referrer" />
+          </div>
+        </div>
+
+        {(isAdmin || (user && user.uid === post.authorId)) && (
+          <button onClick={() => onDelete(post.id)} className="flex flex-col items-center gap-1 mt-2">
+            <div className="bg-red-500/80 p-2 rounded-full drop-shadow-md">
+              <X size={20} className="text-white" />
+            </div>
+          </button>
+        )}
+      </div>
+
+      {/* Bottom Info */}
+      <div className="absolute bottom-0 left-0 right-16 p-4 pt-12 bg-gradient-to-t from-black/80 via-black/30 to-transparent z-10 flex flex-col justify-end pb-6">
+        <h3 className="text-white font-bold text-[17px] mb-1 drop-shadow-md">@{post.authorName}</h3>
+        {post.text && (
+          <p className="text-white text-sm line-clamp-2 drop-shadow-md mb-3" dir="auto">
+            {post.text}
+          </p>
+        )}
+        <div className="flex items-center gap-2 text-white">
+          <Music size={16} className="shrink-0" />
+          <div className="overflow-hidden w-48 relative h-5">
+            <div className="absolute whitespace-nowrap text-sm animate-[marquee_5s_linear_infinite]">
+              الصوت الأصلي - {post.authorName}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function DiscoverPage() {
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'latest' | 'videos'>('latest');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCommentsModal, setShowCommentsModal] = useState<string | null>(null);
   
@@ -134,20 +267,63 @@ export default function DiscoverPage() {
     }
   };
 
+  const videoPosts = posts.filter(p => p.imageUrl?.toLowerCase().includes('.mp4'));
+  const regularPosts = posts.filter(p => !p.imageUrl?.toLowerCase().includes('.mp4'));
+
   return (
-    <div className="flex flex-col min-h-full bg-gray-50 relative pb-20">
+    <div className={`flex flex-col min-h-full relative ${activeTab === 'videos' ? 'bg-black' : 'bg-gray-50 pb-20'}`}>
       {/* Header */}
-      <div className="bg-white px-4 pt-6 pb-2 sticky top-0 z-10 shadow-sm flex justify-center border-b border-gray-100">
-        <div className="flex gap-8">
-          <button className="pb-2 text-sm font-bold border-b-2 border-purple-600 text-purple-600">أحدث</button>
-          <button className="pb-2 text-sm font-medium text-gray-500 border-b-2 border-transparent">نشاطات</button>
+      <div className={`${activeTab === 'videos' ? 'bg-transparent absolute top-0 left-0 right-0 z-30 pt-8 pb-4' : 'bg-white px-4 pt-6 pb-2 sticky top-0 z-30 shadow-sm border-b border-gray-100'} flex justify-center transition-colors`}>
+        <div className="flex gap-6 items-center">
+          {activeTab === 'videos' && (
+            <button className="absolute left-4 text-white">
+              <Search size={24} />
+            </button>
+          )}
+          <button 
+            onClick={() => setActiveTab('latest')}
+            className={`pb-2 text-[17px] font-bold border-b-2 transition ${activeTab === 'latest' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-300 drop-shadow-md'}`}
+          >
+            أحدث
+          </button>
+          <button 
+            onClick={() => setActiveTab('videos')}
+            className={`pb-2 text-[17px] font-bold border-b-2 transition ${activeTab === 'videos' ? 'border-white text-white drop-shadow-md' : 'border-transparent text-gray-500'}`}
+          >
+            فيديوهات
+          </button>
+          {activeTab === 'videos' && (
+            <button className="absolute right-4 text-white">
+              <Tv size={24} />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Posts Feed */}
-        <div className="space-y-4">
-          {posts.map((post) => {
+      {activeTab === 'videos' ? (
+        <div className="flex-1 overflow-y-auto snap-y snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] bg-black h-screen w-full absolute inset-0 z-20">
+          {videoPosts.map(post => (
+            <VideoPost 
+              key={post.id} 
+              post={post} 
+              onLike={handleLike} 
+              onComment={setShowCommentsModal} 
+              user={user} 
+              isAdmin={isAdmin} 
+              onDelete={handleDeletePost} 
+            />
+          ))}
+          {videoPosts.length === 0 && (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              لا توجد فيديوهات حالياً
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-4 space-y-4">
+          {/* Posts Feed */}
+          <div className="space-y-4">
+          {regularPosts.map((post) => {
             const isLiked = user && post.likedBy?.includes(user.uid);
             return (
               <div key={post.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -222,13 +398,14 @@ export default function DiscoverPage() {
             );
           })}
           
-          {posts.length === 0 && (
+          {regularPosts.length === 0 && (
             <div className="text-center py-10 text-gray-500 text-sm">
               لا توجد منشورات حتى الآن. كن أول من ينشر!
             </div>
           )}
         </div>
       </div>
+      )}
 
       {/* Floating Action Button */}
       <button 
@@ -299,8 +476,10 @@ export default function DiscoverPage() {
 
       {/* Comments Modal */}
       {showCommentsModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end">
-          <div className="bg-white w-full h-[75vh] rounded-t-3xl flex flex-col shadow-2xl animate-slide-up">
+        <div className={`fixed inset-0 z-50 flex flex-col justify-end ${activeTab === 'videos' ? 'bg-transparent' : 'bg-black/60'}`} onClick={(e) => {
+          if (e.target === e.currentTarget) setShowCommentsModal(null);
+        }}>
+          <div className="bg-white w-full h-[60vh] rounded-t-3xl flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-slide-up">
             <div className="flex justify-between items-center p-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-800">التعليقات</h2>
               <button onClick={() => setShowCommentsModal(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition">

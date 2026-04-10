@@ -14,6 +14,8 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { initBackTrap, registerBackHandler, unregisterBackHandler } from './hooks/useBackButton';
+import { db } from './firebase';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 
 function MainApp() {
   const [currentTab, setCurrentTab] = useState('home');
@@ -21,6 +23,16 @@ function MainApp() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [shownEntrances, setShownEntrances] = useState<Set<string>>(new Set());
   const { user, isProfileComplete } = useAuth();
+  const [navIcons, setNavIcons] = useState<any>({});
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'app_config'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().navIcons) {
+        setNavIcons(docSnap.data().navIcons);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     initBackTrap();
@@ -96,8 +108,8 @@ function MainApp() {
 
         {/* Bottom Navigation */}
         <div className="absolute bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 px-2 z-50 rounded-t-2xl shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-          <NavItem icon={<Home size={22} />} label="الرئيسية" isActive={currentTab === 'home'} onClick={() => setCurrentTab('home')} />
-          <NavItem icon={<Compass size={22} />} label="اكتشاف" isActive={currentTab === 'discover'} onClick={() => setCurrentTab('discover')} />
+          <NavItem customIcon={navIcons.home} icon={<Home size={22} />} label="الرئيسية" isActive={currentTab === 'home'} onClick={() => setCurrentTab('home')} />
+          <NavItem customIcon={navIcons.discover} icon={<Compass size={22} />} label="اكتشاف" isActive={currentTab === 'discover'} onClick={() => setCurrentTab('discover')} />
           
           {/* Center Live Button */}
           <div className="relative -top-6">
@@ -119,14 +131,18 @@ function MainApp() {
                   setActiveRoomId(roomRef.id);
                 }
               }}
-              className="w-14 h-14 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white hover:scale-105 transition-transform"
+              className="w-14 h-14 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white hover:scale-105 transition-transform overflow-hidden"
             >
-              <Mic size={24} />
+              {navIcons.center ? (
+                <img src={navIcons.center} alt="Center" className="w-full h-full object-cover" />
+              ) : (
+                <Mic size={24} />
+              )}
             </button>
           </div>
 
-          <NavItem icon={<MessageSquare size={22} />} label="رسائل" isActive={currentTab === 'messages'} onClick={() => setCurrentTab('messages')} badge={3} />
-          <NavItem icon={<UserIcon size={22} />} label="حسابي" isActive={currentTab === 'profile'} onClick={() => setCurrentTab('profile')} />
+          <NavItem customIcon={navIcons.messages} icon={<MessageSquare size={22} />} label="رسائل" isActive={currentTab === 'messages'} onClick={() => setCurrentTab('messages')} badge={3} />
+          <NavItem customIcon={navIcons.profile} icon={<UserIcon size={22} />} label="حسابي" isActive={currentTab === 'profile'} onClick={() => setCurrentTab('profile')} />
         </div>
       </div>
     </div>
@@ -141,11 +157,15 @@ export default function App() {
   );
 }
 
-function NavItem({ icon, label, isActive, onClick, badge }: any) {
+function NavItem({ icon, customIcon, label, isActive, onClick, badge }: any) {
   return (
     <button onClick={onClick} className={`flex flex-col items-center justify-center w-16 transition-colors ${isActive ? 'text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}>
       <div className="relative mb-1">
-        {icon}
+        {customIcon ? (
+          <img src={customIcon} alt={label} className={`w-6 h-6 object-contain ${isActive ? '' : 'opacity-60 grayscale'}`} />
+        ) : (
+          icon
+        )}
         {badge && (
           <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
             {badge}
