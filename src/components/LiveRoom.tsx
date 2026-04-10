@@ -945,18 +945,16 @@ export default function LiveRoom({
                   <div className="text-xs font-bold text-white truncate">{room.currentMusic.name}</div>
                   <div className="text-[10px] text-gray-400 truncate">بواسطة: {room.currentMusic.playedBy}</div>
                 </div>
-                {(room.hostId === user?.uid || userData?.role === 'admin') && (
-                  <button 
-                    onClick={async () => {
-                      await updateDoc(doc(db, 'rooms', roomId), {
-                        'currentMusic.isPlaying': false
-                      });
-                    }}
-                    className="p-1.5 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500/40 transition"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+                <button 
+                  onClick={async () => {
+                    await updateDoc(doc(db, 'rooms', roomId), {
+                      'currentMusic.isPlaying': false
+                    });
+                  }}
+                  className="p-1.5 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500/40 transition"
+                >
+                  <X size={14} />
+                </button>
                 {!room.currentMusic.isLocalStream && room.currentMusic.url && (
                   <audio src={room.currentMusic.url} autoPlay loop />
                 )}
@@ -1545,63 +1543,61 @@ export default function LiveRoom({
                   { icon: appIcons.storeIcon ? <img src={appIcons.storeIcon} className="w-6 h-6 object-contain" /> : <ShoppingBag />, label: 'مول', color: 'text-pink-400', action: () => { setShowAdminTools(false); setShowMallModal(true); } },
                   { icon: <Star />, label: 'PK', color: 'text-orange-400' },
                   { icon: appIcons.settingsIcon ? <img src={appIcons.settingsIcon} className="w-6 h-6 object-contain" /> : <Settings />, label: 'قرص الحظ', color: 'text-purple-400' },
-                  ...(room.hostId === user?.uid || userData?.role === 'admin' ? [
-                    { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
-                    { icon: appIcons.musicIcon ? <img src={appIcons.musicIcon} className="w-6 h-6 object-contain" /> : <Music />, label: 'موسيقى', color: 'text-green-400', action: () => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'audio/*';
-                      input.onchange = async (e: any) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
+                  { icon: <ImageIcon />, label: 'صورة', color: 'text-blue-400', action: () => { setShowAdminTools(false); setShowBackgroundModal(true); } },
+                  { icon: appIcons.musicIcon ? <img src={appIcons.musicIcon} className="w-6 h-6 object-contain" /> : <Music />, label: 'موسيقى', color: 'text-green-400', action: () => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'audio/*';
+                    input.onchange = async (e: any) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      
+                      try {
+                        const url = URL.createObjectURL(file);
+                        setLocalMusicUrl(url);
+                        setShowAdminTools(false);
                         
-                        try {
-                          const url = URL.createObjectURL(file);
-                          setLocalMusicUrl(url);
-                          setShowAdminTools(false);
-                          
-                          await updateDoc(doc(db, 'rooms', roomId), {
-                            currentMusic: {
-                              name: file.name,
-                              isPlaying: true,
-                              startTime: Date.now(),
-                              playedBy: user?.displayName || 'مستخدم',
-                              isLocalStream: true
-                            }
-                          });
-                        } catch (error) {
-                          console.error('Error starting music:', error);
-                          alert('حدث خطأ أثناء تشغيل الموسيقى');
-                        }
-                      };
-                      input.click();
-                    } },
-                    { icon: appIcons.usersIcon ? <img src={appIcons.usersIcon} className="w-6 h-6 object-contain" /> : <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
-                    { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
-                    { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
-                      setShowAdminTools(false);
-                      setConfirmModal({
-                        show: true,
-                        title: 'تصفير الكاريزما',
-                        message: 'هل أنت متأكد من تصفير كاريزما الغرفة والمايكات؟ لا يمكن التراجع عن هذا الإجراء.',
-                        onConfirm: async () => {
-                          await updateDoc(doc(db, 'rooms', roomId), { charisma: 0 });
-                          const micsSnap = await getDocs(collection(db, 'rooms', roomId, 'mics'));
-                          const batch = writeBatch(db);
-                          micsSnap.docs.forEach(d => {
-                            batch.update(d.ref, { charisma: 0 });
-                          });
-                          await batch.commit();
-                          setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
-                        }
-                      });
-                    }},
-                    { icon: <Edit3 />, label: 'تغيير الاسم', color: 'text-blue-400', action: () => {
-                      setShowAdminTools(false);
-                      setNewRoomName(room?.name || '');
-                      setShowEditRoomName(true);
-                    }}
-                  ] : [])
+                        await updateDoc(doc(db, 'rooms', roomId), {
+                          currentMusic: {
+                            name: file.name,
+                            isPlaying: true,
+                            startTime: Date.now(),
+                            playedBy: user?.displayName || 'مستخدم',
+                            isLocalStream: true
+                          }
+                        });
+                      } catch (error) {
+                        console.error('Error starting music:', error);
+                        alert('حدث خطأ أثناء تشغيل الموسيقى');
+                      }
+                    };
+                    input.click();
+                  } },
+                  { icon: appIcons.usersIcon ? <img src={appIcons.usersIcon} className="w-6 h-6 object-contain" /> : <Users />, label: 'دعوة الأصدقاء', color: 'text-teal-400' },
+                  { icon: <ShieldBan />, label: 'القائمة السوداء', color: 'text-red-400' },
+                  { icon: <Zap />, label: 'تصفير الكاريزما', color: 'text-yellow-400', action: async () => {
+                    setShowAdminTools(false);
+                    setConfirmModal({
+                      show: true,
+                      title: 'تصفير الكاريزما',
+                      message: 'هل أنت متأكد من تصفير كاريزما الغرفة والمايكات؟ لا يمكن التراجع عن هذا الإجراء.',
+                      onConfirm: async () => {
+                        await updateDoc(doc(db, 'rooms', roomId), { charisma: 0 });
+                        const micsSnap = await getDocs(collection(db, 'rooms', roomId, 'mics'));
+                        const batch = writeBatch(db);
+                        micsSnap.docs.forEach(d => {
+                          batch.update(d.ref, { charisma: 0 });
+                        });
+                        await batch.commit();
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: () => {} });
+                      }
+                    });
+                  }},
+                  { icon: <Edit3 />, label: 'تغيير الاسم', color: 'text-blue-400', action: () => {
+                    setShowAdminTools(false);
+                    setNewRoomName(room?.name || '');
+                    setShowEditRoomName(true);
+                  }}
                 ].map((tool, idx) => (
                   <div key={idx} onClick={tool.action} className="flex flex-col items-center gap-2 cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl bg-gray-800 flex items-center justify-center ${tool.color}`}>
