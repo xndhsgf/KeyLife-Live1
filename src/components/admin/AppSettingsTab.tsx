@@ -10,7 +10,9 @@ export default function AppSettingsTab() {
     discover: '',
     center: '',
     messages: '',
-    profile: ''
+    profile: '',
+    discoverLatest: '',
+    discoverVideos: ''
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,6 +140,28 @@ export default function AppSettingsTab() {
               type="text"
               value={navIcons.profile}
               onChange={(e) => handleIconChange('profile', e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/icon.png"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">أيقونة "تبويب أحدث" (في صفحة اكتشاف)</label>
+            <input
+              type="text"
+              value={navIcons.discoverLatest || ''}
+              onChange={(e) => handleIconChange('discoverLatest', e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
+              placeholder="https://example.com/icon.png"
+              dir="ltr"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">أيقونة "تبويب فيديوهات" (في صفحة اكتشاف)</label>
+            <input
+              type="text"
+              value={navIcons.discoverVideos || ''}
+              onChange={(e) => handleIconChange('discoverVideos', e.target.value)}
               className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 text-left"
               placeholder="https://example.com/icon.png"
               dir="ltr"

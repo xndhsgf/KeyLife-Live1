@@ -131,10 +131,10 @@ function MainApp() {
                   setActiveRoomId(roomRef.id);
                 }
               }}
-              className="w-14 h-14 bg-gradient-to-tr from-purple-600 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg border-4 border-white hover:scale-105 transition-transform overflow-hidden"
+              className={`w-14 h-14 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform ${navIcons.center ? 'bg-transparent drop-shadow-xl' : 'bg-gradient-to-tr from-purple-600 to-pink-500 shadow-lg border-4 border-white overflow-hidden'}`}
             >
               {navIcons.center ? (
-                <img src={navIcons.center} alt="Center" className="w-full h-full object-cover" />
+                <img src={navIcons.center} alt="Center" className="w-full h-full object-contain" />
               ) : (
                 <Mic size={24} />
               )}

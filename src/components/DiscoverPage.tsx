@@ -152,6 +152,17 @@ export default function DiscoverPage() {
   // Comments State
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [tabIcons, setTabIcons] = useState({ latest: '', videos: '' });
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'app_config'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().navIcons) {
+        const icons = docSnap.data().navIcons;
+        setTabIcons({ latest: icons.discoverLatest || '', videos: icons.discoverVideos || '' });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -282,15 +293,17 @@ export default function DiscoverPage() {
           )}
           <button 
             onClick={() => setActiveTab('latest')}
-            className={`pb-2 text-[17px] font-bold border-b-2 transition ${activeTab === 'latest' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-300 drop-shadow-md'}`}
+            className={`flex flex-col items-center pb-2 border-b-2 transition ${activeTab === 'latest' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-400 drop-shadow-md'}`}
           >
-            أحدث
+            {tabIcons.latest && <img src={tabIcons.latest} alt="أحدث" className={`w-6 h-6 mb-1 object-contain ${activeTab === 'latest' ? '' : 'opacity-60 grayscale'}`} />}
+            <span className="text-[17px] font-bold">أحدث</span>
           </button>
           <button 
             onClick={() => setActiveTab('videos')}
-            className={`pb-2 text-[17px] font-bold border-b-2 transition ${activeTab === 'videos' ? 'border-white text-white drop-shadow-md' : 'border-transparent text-gray-500'}`}
+            className={`flex flex-col items-center pb-2 border-b-2 transition ${activeTab === 'videos' ? 'border-white text-white drop-shadow-md' : 'border-transparent text-gray-500'}`}
           >
-            فيديوهات
+            {tabIcons.videos && <img src={tabIcons.videos} alt="فيديوهات" className={`w-6 h-6 mb-1 object-contain ${activeTab === 'videos' ? '' : 'opacity-60 grayscale'}`} />}
+            <span className="text-[17px] font-bold">فيديوهات</span>
           </button>
           {activeTab === 'videos' && (
             <button className="absolute right-4 text-white">
