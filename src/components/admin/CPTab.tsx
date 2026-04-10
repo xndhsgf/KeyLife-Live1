@@ -71,12 +71,16 @@ export default function CPTab() {
     setLoading(true);
     try {
       const usersRef = collection(db, 'users');
-      const querySnapshot = await getDocs(usersRef);
+      const usersSnapshot = await getDocs(usersRef);
+      
+      const cpRequestsRef = collection(db, 'cp_requests');
+      const cpRequestsSnapshot = await getDocs(cpRequestsRef);
       
       const batch = writeBatch(db);
-      let count = 0;
+      let usersCount = 0;
+      let requestsCount = 0;
       
-      querySnapshot.forEach((userDoc) => {
+      usersSnapshot.forEach((userDoc) => {
         const data = userDoc.data();
         if (data.cpPartnerId) {
           batch.update(userDoc.ref, {
@@ -88,13 +92,18 @@ export default function CPTab() {
             cpLevel: deleteField(),
             cpPoints: deleteField()
           });
-          count++;
+          usersCount++;
         }
       });
       
-      if (count > 0) {
+      cpRequestsSnapshot.forEach((requestDoc) => {
+        batch.delete(requestDoc.ref);
+        requestsCount++;
+      });
+      
+      if (usersCount > 0 || requestsCount > 0) {
         await batch.commit();
-        alert(`تم حذف علاقات الـ CP لـ ${count} مستخدم بنجاح.`);
+        alert(`تم حذف علاقات الـ CP لـ ${usersCount} مستخدم وتصفير الترتيب بنجاح.`);
       } else {
         alert('لا يوجد مستخدمين لديهم علاقة CP حالياً.');
       }
