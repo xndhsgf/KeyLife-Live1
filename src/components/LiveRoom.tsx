@@ -597,11 +597,6 @@ export default function LiveRoom({
 
       setIsSendingGift(true);
       try {
-        // Deduct diamonds
-        await updateDoc(doc(db, 'users', user!.uid), {
-          diamonds: increment(-totalCost)
-        });
-        
         // Send CP request
         const receiverDoc = await getDoc(doc(db, 'users', receiverId));
         const receiverData = receiverDoc.data();
@@ -629,8 +624,10 @@ export default function LiveRoom({
           timestamp: Date.now()
         });
 
+        // Execute the standard gift logic (animation, deduction, charisma, room events)
+        await executeSendGift(selectedGift, selectedReceivers, giftQuantity);
+
         alert('تم إرسال طلب الارتباط (CP) بنجاح! في انتظار موافقة الطرف الآخر.');
-        setShowGiftModal(false);
       } catch (error: any) {
         alert('حدث خطأ: ' + error.message);
       } finally {

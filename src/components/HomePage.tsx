@@ -51,9 +51,15 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
 
   useEffect(() => {
     if (showCPModal) {
-      const q = query(collection(db, 'cp_requests'), where('status', '==', 'accepted'), orderBy('createdAt', 'desc'), limit(50));
+      const q = query(collection(db, 'cp_requests'), where('status', '==', 'accepted'), limit(50));
       const unsub = onSnapshot(q, (snapshot) => {
-        setCpList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+        list.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return timeB - timeA;
+        });
+        setCpList(list);
       });
       return () => unsub();
     }
