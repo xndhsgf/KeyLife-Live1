@@ -489,7 +489,7 @@ export default function DiscoverPage() {
 
       {/* Comments Modal */}
       {showCommentsModal && (
-        <div className={`fixed inset-0 z-50 flex flex-col justify-end ${activeTab === 'videos' ? 'bg-transparent' : 'bg-black/60'}`} onClick={(e) => {
+        <div className={`fixed inset-0 z-[100] flex flex-col justify-end ${activeTab === 'videos' ? 'bg-transparent' : 'bg-black/60'}`} onClick={(e) => {
           if (e.target === e.currentTarget) setShowCommentsModal(null);
         }}>
           <div className="bg-white w-full h-[60vh] rounded-t-3xl flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-slide-up">
@@ -524,7 +524,7 @@ export default function DiscoverPage() {
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-100 bg-white">
+            <div className="p-4 pb-8 border-t border-gray-100 bg-white">
               <form onSubmit={handleAddComment} className="flex gap-2">
                 <input
                   type="text"
