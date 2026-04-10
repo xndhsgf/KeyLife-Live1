@@ -127,9 +127,9 @@ export default function DiscoverPage() {
     if (window.confirm('هل أنت متأكد من حذف هذا المنشور؟')) {
       try {
         await deleteDoc(doc(db, 'posts', postId));
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting post:", error);
-        alert("حدث خطأ أثناء حذف المنشور");
+        alert("حدث خطأ أثناء حذف المنشور: " + (error.message || "صلاحيات غير كافية"));
       }
     }
   };
