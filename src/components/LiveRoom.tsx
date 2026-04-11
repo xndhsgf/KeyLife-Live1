@@ -1158,28 +1158,38 @@ export default function LiveRoom({
             {/* Combo Button - Moved to bottom left above chat input */}
             <AnimatePresence>
               {lastSentGiftData && (
-                <motion.button
+                <motion.div
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleComboClick}
-                  disabled={isSendingGift}
-                  className="absolute -top-16 left-4 z-50 bg-gradient-to-r from-pink-500 to-purple-600 p-1 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.5)] border-2 border-white/20 flex flex-col items-center justify-center w-14 h-14 overflow-hidden group"
+                  className="absolute -top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
                 >
-                  <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
-                  <img src={lastSentGiftData.gift.imageUrl || undefined} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
-                  <span className="text-[9px] font-black text-white z-10 mt-0.5">تكرار</span>
+                  {/* Diamond Balance Badge */}
+                  <div className="bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full flex items-center gap-1 mb-1 border border-white/10 shadow-lg">
+                    <span className="text-yellow-400 text-[10px] font-bold">{userDiamonds}</span>
+                    <Diamond size={10} className="text-yellow-400" />
+                  </div>
                   
-                  {/* Timer Progress Bar */}
-                  <motion.div 
-                    key={lastSentGiftData.timestamp} // Force re-render on new combo
-                    initial={{ height: "100%" }}
-                    animate={{ height: "0%" }}
-                    transition={{ duration: 5, ease: "linear" }}
-                    className="absolute bottom-0 left-0 w-full bg-yellow-400/30 z-0"
-                  />
-                </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleComboClick}
+                    disabled={isSendingGift}
+                    className="bg-gradient-to-r from-pink-500 to-purple-600 p-1 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.5)] border-2 border-white/20 flex flex-col items-center justify-center w-14 h-14 overflow-hidden group relative"
+                  >
+                    <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
+                    <img src={lastSentGiftData.gift.imageUrl || undefined} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
+                    <span className="text-[9px] font-black text-white z-10 mt-0.5">تكرار</span>
+                    
+                    {/* Timer Progress Bar */}
+                    <motion.div 
+                      key={lastSentGiftData.timestamp} // Force re-render on new combo
+                      initial={{ height: "100%" }}
+                      animate={{ height: "0%" }}
+                      transition={{ duration: 5, ease: "linear" }}
+                      className="absolute bottom-0 left-0 w-full bg-yellow-400/30 z-0"
+                    />
+                  </motion.button>
+                </motion.div>
               )}
             </AnimatePresence>
 
