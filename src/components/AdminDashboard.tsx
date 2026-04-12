@@ -1072,6 +1072,8 @@ function GiftBoxTab() {
   const [editGiftSize, setEditGiftSize] = useState('50');
   const [editCategory, setEditCategory] = useState('classic');
   const [editGiftEffect, setEditGiftEffect] = useState('none');
+  const [editWinProbability, setEditWinProbability] = useState('20');
+  const [editWinMultiplier, setEditWinMultiplier] = useState('5');
   const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
@@ -1110,6 +1112,8 @@ function GiftBoxTab() {
     setEditGiftSize(gift.giftSize?.toString() || '50');
     setEditCategory(gift.category || 'classic');
     setEditGiftEffect(gift.giftEffect || 'none');
+    setEditWinProbability(gift.winProbability?.toString() || '20');
+    setEditWinMultiplier(gift.winMultiplier?.toString() || '5');
   };
 
   const handleUpdateGift = async (e: React.FormEvent) => {
@@ -1120,7 +1124,7 @@ function GiftBoxTab() {
     setIsSaving(true);
     try {
       const giftRef = doc(db, 'gifts', editingGift.id);
-      const updatedData = {
+      const updatedData: any = {
         name: editName,
         description: editDescription,
         imageUrl: editImageUrl,
@@ -1135,6 +1139,11 @@ function GiftBoxTab() {
         giftEffect: editGiftEffect,
         updatedAt: new Date().toISOString()
       };
+
+      if (editCategory === 'lucky') {
+        updatedData.winProbability = Number(editWinProbability);
+        updatedData.winMultiplier = Number(editWinMultiplier);
+      }
 
       await updateDoc(giftRef, updatedData);
       
@@ -1280,17 +1289,27 @@ function GiftBoxTab() {
                   </div>
                 </div>
                 {editCategory === 'lucky' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">تأثير حركة الهدية</label>
-                    <select value={editGiftEffect} onChange={e => setEditGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
-                      <option value="none">بدون تأثير</option>
-                      <option value="shake">اهتزاز</option>
-                      <option value="pulse">نبض</option>
-                      <option value="spin">دوران</option>
-                      <option value="bounce">قفز</option>
-                      <option value="zoom_mic">زوم على المايك</option>
-                    </select>
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">نسبة الفوز (%)</label>
+                      <input type="number" value={editWinProbability} onChange={e => setEditWinProbability(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white" required min="0" max="100" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">مضاعف الربح (عند الفوز)</label>
+                      <input type="number" value={editWinMultiplier} onChange={e => setEditWinMultiplier(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white" required min="1" step="0.1" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">تأثير حركة الهدية</label>
+                      <select value={editGiftEffect} onChange={e => setEditGiftEffect(e.target.value)} className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white">
+                        <option value="none">بدون تأثير</option>
+                        <option value="shake">اهتزاز</option>
+                        <option value="pulse">نبض</option>
+                        <option value="spin">دوران</option>
+                        <option value="bounce">قفز</option>
+                        <option value="zoom_mic">زوم على المايك</option>
+                      </select>
+                    </div>
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">

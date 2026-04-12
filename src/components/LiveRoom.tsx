@@ -10,7 +10,7 @@ import BackgroundSelector from './BackgroundSelector';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
 import GameCenterModal from './games/GameCenterModal';
 import PrivateChat from './PrivateChat';
-import { useAgora, AGORA_APP_ID } from '../hooks/useAgora';
+import { useAgora } from '../hooks/useAgora';
 import AgoraRTC from 'agora-rtc-sdk-ng';
 
 export default function LiveRoom({ 
@@ -103,8 +103,6 @@ export default function LiveRoom({
   const [isUploadingMusic, setIsUploadingMusic] = useState(false);
   const [localMusicUrl, setLocalMusicUrl] = useState<string | null>(null);
   const [localMusicTrack, setLocalMusicTrack] = useState<any>(null);
-  const [musicClient, setMusicClient] = useState<any>(null);
-  const [musicVolume, setMusicVolume] = useState(50);
   const localAudioRef = useRef<HTMLAudioElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const micRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -115,47 +113,30 @@ export default function LiveRoom({
   const { isJoined, isMuted, toggleMute, remoteUsers, speakingUsers, client } = useAgora(roomId, user?.uid, isOnMic);
 
   useEffect(() => {
-    if (localMusicUrl && localAudioRef.current) {
-      localAudioRef.current.volume = musicVolume / 100;
-      localAudioRef.current.play().catch(e => console.error("Auto-play failed:", e));
-    }
-  }, [localMusicUrl]);
-
-  useEffect(() => {
     if (room?.currentMusic?.isPlaying === false) {
-      if (localMusicTrack && musicClient) {
-        musicClient.unpublish(localMusicTrack).catch(console.error);
+      if (localMusicTrack && client) {
+        client.unpublish(localMusicTrack).catch(console.error);
         localMusicTrack.close();
         setLocalMusicTrack(null);
-        musicClient.leave();
-        setMusicClient(null);
       }
       if (localMusicUrl) {
         URL.revokeObjectURL(localMusicUrl);
         setLocalMusicUrl(null);
       }
     }
-  }, [room?.currentMusic?.isPlaying, musicClient, localMusicTrack, localMusicUrl]);
+  }, [room?.currentMusic?.isPlaying, client, localMusicTrack, localMusicUrl]);
 
   useEffect(() => {
     return () => {
-      if (localMusicTrack && musicClient) {
-        musicClient.unpublish(localMusicTrack).catch(console.error);
+      if (localMusicTrack && client) {
+        client.unpublish(localMusicTrack).catch(console.error);
         localMusicTrack.close();
-        musicClient.leave();
       }
       if (localMusicUrl) {
         URL.revokeObjectURL(localMusicUrl);
       }
     };
-  }, [localMusicTrack, musicClient, localMusicUrl]);
-
-  useEffect(() => {
-    const musicUser = remoteUsers.find(u => String(u.uid).includes('_music'));
-    if (musicUser && musicUser.audioTrack) {
-      musicUser.audioTrack.setVolume(musicVolume);
-    }
-  }, [remoteUsers, musicVolume]);
+  }, [localMusicTrack, client, localMusicUrl]);
 
   useEffect(() => {
     const handleBack = () => {
@@ -637,23 +618,16 @@ export default function LiveRoom({
   };
 
   const handleLocalMusicPlay = async () => {
-    if (!localAudioRef.current || musicClient || localMusicTrack) return;
+    if (!client || !localAudioRef.current) return;
     try {
       const audioEl = localAudioRef.current as any;
-      audioEl.volume = musicVolume / 100;
-      
       const stream = audioEl.captureStream ? audioEl.captureStream() : audioEl.mozCaptureStream ? audioEl.mozCaptureStream() : null;
       if (stream) {
         const track = stream.getAudioTracks()[0];
         if (track) {
           const customTrack = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: track });
           setLocalMusicTrack(customTrack);
-          
-          const mClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-          const randomSuffix = Math.floor(Math.random() * 10000);
-          await mClient.join(AGORA_APP_ID, roomId, null, (user?.uid || '') + '_music_' + randomSuffix);
-          await mClient.publish(customTrack);
-          setMusicClient(mClient);
+          await client.publish(customTrack);
         }
       }
     } catch (e) {
@@ -963,51 +937,24 @@ export default function LiveRoom({
           )}
           {room?.currentMusic?.isPlaying && (
             <div className="px-4 mb-2">
-              <div className="bg-black/40 backdrop-blur-md rounded-xl p-3 flex flex-col gap-2 border border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center animate-[spin_3s_linear_infinite]">
-                    <Music size={14} className="text-white" />
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="text-xs font-bold text-white truncate">{room.currentMusic.name}</div>
-                    <div className="text-[10px] text-gray-400 truncate">بواسطة: {room.currentMusic.playedBy}</div>
-                  </div>
-                  <button 
-                    onClick={async () => {
-                      await updateDoc(doc(db, 'rooms', roomId), {
-                        'currentMusic.isPlaying': false
-                      });
-                    }}
-                    className="p-1.5 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500/40 transition"
-                  >
-                    <X size={14} />
-                  </button>
+              <div className="bg-black/40 backdrop-blur-md rounded-xl p-2 flex items-center gap-3 border border-white/10">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center animate-[spin_3s_linear_infinite]">
+                  <Music size={14} className="text-white" />
                 </div>
-                
-                {/* Volume Control */}
-                <div className="flex items-center gap-2 px-1">
-                  <span className="text-[10px] text-gray-400">الصوت</span>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    value={musicVolume}
-                    onChange={(e) => {
-                      const newVol = parseInt(e.target.value);
-                      setMusicVolume(newVol);
-                      if (localAudioRef.current) {
-                        localAudioRef.current.volume = newVol / 100;
-                      }
-                      // Adjust remote music track volume if listening
-                      const musicUser = remoteUsers.find(u => String(u.uid).includes('_music'));
-                      if (musicUser && musicUser.audioTrack) {
-                        musicUser.audioTrack.setVolume(newVol);
-                      }
-                    }}
-                    className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-purple-500 [&::-webkit-slider-thumb]:rounded-full"
-                  />
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-xs font-bold text-white truncate">{room.currentMusic.name}</div>
+                  <div className="text-[10px] text-gray-400 truncate">بواسطة: {room.currentMusic.playedBy}</div>
                 </div>
-
+                <button 
+                  onClick={async () => {
+                    await updateDoc(doc(db, 'rooms', roomId), {
+                      'currentMusic.isPlaying': false
+                    });
+                  }}
+                  className="p-1.5 bg-red-500/20 text-red-400 rounded-full hover:bg-red-500/40 transition"
+                >
+                  <X size={14} />
+                </button>
                 {!room.currentMusic.isLocalStream && room.currentMusic.url && (
                   <audio src={room.currentMusic.url} autoPlay loop />
                 )}
@@ -1017,7 +964,7 @@ export default function LiveRoom({
                     src={localMusicUrl} 
                     autoPlay 
                     loop 
-                    onPlaying={handleLocalMusicPlay}
+                    onPlay={handleLocalMusicPlay}
                   />
                 )}
               </div>
@@ -1211,28 +1158,38 @@ export default function LiveRoom({
             {/* Combo Button - Moved to bottom left above chat input */}
             <AnimatePresence>
               {lastSentGiftData && (
-                <motion.button
+                <motion.div
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleComboClick}
-                  disabled={isSendingGift}
-                  className="absolute -top-16 left-4 z-50 bg-gradient-to-r from-pink-500 to-purple-600 p-1 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.5)] border-2 border-white/20 flex flex-col items-center justify-center w-14 h-14 overflow-hidden group"
+                  className="absolute -top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
                 >
-                  <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
-                  <img src={lastSentGiftData.gift.imageUrl || undefined} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
-                  <span className="text-[9px] font-black text-white z-10 mt-0.5">تكرار</span>
+                  {/* Diamond Balance Badge */}
+                  <div className="bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full flex items-center gap-1 mb-1 border border-white/10 shadow-lg">
+                    <span className="text-yellow-400 text-[10px] font-bold">{userDiamonds}</span>
+                    <Diamond size={10} className="text-yellow-400" />
+                  </div>
                   
-                  {/* Timer Progress Bar */}
-                  <motion.div 
-                    key={lastSentGiftData.timestamp} // Force re-render on new combo
-                    initial={{ height: "100%" }}
-                    animate={{ height: "0%" }}
-                    transition={{ duration: 5, ease: "linear" }}
-                    className="absolute bottom-0 left-0 w-full bg-yellow-400/30 z-0"
-                  />
-                </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleComboClick}
+                    disabled={isSendingGift}
+                    className="bg-gradient-to-r from-pink-500 to-purple-600 p-1 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.5)] border-2 border-white/20 flex flex-col items-center justify-center w-14 h-14 overflow-hidden group relative"
+                  >
+                    <div className="absolute inset-0 bg-white/20 group-hover:bg-transparent transition-colors"></div>
+                    <img src={lastSentGiftData.gift.imageUrl || undefined} alt="combo" className="w-6 h-6 object-contain drop-shadow-md z-10" />
+                    <span className="text-[9px] font-black text-white z-10 mt-0.5">تكرار</span>
+                    
+                    {/* Timer Progress Bar */}
+                    <motion.div 
+                      key={lastSentGiftData.timestamp} // Force re-render on new combo
+                      initial={{ height: "100%" }}
+                      animate={{ height: "0%" }}
+                      transition={{ duration: 5, ease: "linear" }}
+                      className="absolute bottom-0 left-0 w-full bg-yellow-400/30 z-0"
+                    />
+                  </motion.button>
+                </motion.div>
               )}
             </AnimatePresence>
 

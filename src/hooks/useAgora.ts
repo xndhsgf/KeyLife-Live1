@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack, IRemoteUser } from 'agora-rtc-sdk-ng';
 
-export const AGORA_APP_ID = '0070879b369c4918a9e7543966d9a02b';
+const APP_ID = '0070879b369c4918a9e7543966d9a02b';
 
 export function useAgora(roomId: string, userId: string | undefined, isOnMic: boolean) {
   const [client, setClient] = useState<IAgoraRTCClient | null>(null);
@@ -14,14 +14,14 @@ export function useAgora(roomId: string, userId: string | undefined, isOnMic: bo
   useEffect(() => {
     if (!roomId || !userId) return;
 
-    let isMounted = true;
-    const rtcClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-
     const initAgora = async () => {
+      const rtcClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      
       rtcClient.enableAudioVolumeIndicator();
 
       rtcClient.on('volume-indicator', (volumes) => {
         const speaking = volumes.filter(v => v.level > 5).map(v => {
+          // Agora uses uid 0 for the local user in volume indicators sometimes
           if (v.uid === 0 || v.uid === '0') return String(userId);
           return String(v.uid);
         });
@@ -53,28 +53,21 @@ export function useAgora(roomId: string, userId: string | undefined, isOnMic: bo
       });
 
       try {
-        await rtcClient.join(AGORA_APP_ID, roomId, null, userId);
-        if (isMounted) {
-          setClient(rtcClient);
-          setIsJoined(true);
-        } else {
-          rtcClient.leave();
-        }
-      } catch (error: any) {
-        if (error?.message?.includes('OPERATION_ABORTED') || error?.code === 'OPERATION_ABORTED') {
-          console.log('Agora join aborted (component unmounted)');
-        } else {
-          console.error('Agora join failed:', error);
-        }
+        await rtcClient.join(APP_ID, roomId, null, userId);
+        setClient(rtcClient);
+        setIsJoined(true);
+      } catch (error) {
+        console.error('Agora join failed:', error);
       }
     };
 
     initAgora();
 
     return () => {
-      isMounted = false;
-      rtcClient.leave();
-      setIsJoined(false);
+      if (client) {
+        client.leave();
+        setIsJoined(false);
+      }
     };
   }, [roomId, userId]);
 
@@ -88,11 +81,8 @@ export function useAgora(roomId: string, userId: string | undefined, isOnMic: bo
             const track = await AgoraRTC.createMicrophoneAudioTrack();
             setLocalAudioTrack(track);
             await client.publish([track]);
-          } catch (error: any) {
+          } catch (error) {
             console.error('Failed to create or publish audio track:', error);
-            if (error?.message?.includes('PERMISSION_DENIED') || error?.message?.includes('NotAllowedError')) {
-              alert('يرجى السماح بالوصول إلى الميكروفون للتحدث.');
-            }
           }
         }
       } else {
