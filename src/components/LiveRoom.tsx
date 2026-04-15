@@ -269,7 +269,11 @@ export default function LiveRoom({
               // Skip if it's our own gift event (we already showed it optimistically)
               if (event.senderId === user.uid) return;
               
-              setActiveGiftEvents(prev => [...prev, event]);
+              setActiveGiftEvents(prev => {
+                // Limit concurrent animations to prevent performance issues
+                if (prev.length >= 3) return prev;
+                return [...prev, event];
+              });
               setTimeout(() => {
                 setActiveGiftEvents(prev => prev.filter(e => e.id !== event.id));
               }, (event.giftDuration || 6) * 1000);
@@ -450,9 +454,30 @@ export default function LiveRoom({
         senderId: user!.uid
       });
     } else if (isLucky && gift.hasAnimation !== false) {
-      receiverIds.forEach((receiverId, index) => {
+      if (receiverIds.length > 1) {
+        // Show one animation for all to prevent performance issues
         localEvents.push({
-          id: `${clientEventId}_${index}`,
+          id: clientEventId,
+          type: 'gift',
+          senderName: user!.displayName || 'مستخدم',
+          receiverName: 'الجميع',
+          giftImageUrl: gift.imageUrl,
+          giftAnimationUrl: gift.link || gift.imageUrl,
+          giftAnimationSize: gift.animationSize || 'normal',
+          giftSize: gift.giftSize || null,
+          giftAudioUrl: gift.audioUrl || null,
+          giftDuration: gift.duration || 3,
+          giftName: gift.name,
+          giftCategory: 'lucky',
+          giftEffect: 'normal',
+          receiverId: null,
+          timestamp: Date.now(),
+          senderId: user!.uid
+        });
+      } else {
+        const receiverId = receiverIds[0];
+        localEvents.push({
+          id: clientEventId,
           type: 'gift',
           senderName: user!.displayName || 'مستخدم',
           receiverName: mics.find(m => m.userId === receiverId)?.userName || 'مستخدم',
@@ -466,14 +491,18 @@ export default function LiveRoom({
           giftCategory: 'lucky',
           giftEffect: 'zoom_mic',
           receiverId: receiverId,
-          timestamp: Date.now() + Math.random() * 500,
+          timestamp: Date.now(),
           senderId: user!.uid
         });
-      });
+      }
     }
 
     localEvents.forEach(event => {
-      setActiveGiftEvents(prev => [...prev, event]);
+      setActiveGiftEvents(prev => {
+        // Limit to max 3 concurrent animations to prevent browser freeze/black boxes
+        if (prev.length >= 3) return prev;
+        return [...prev, event];
+      });
       setTimeout(() => {
         setActiveGiftEvents(prev => prev.filter(e => e.id !== event.id));
       }, (event.giftDuration || 6) * 1000);
@@ -520,6 +549,27 @@ export default function LiveRoom({
             receiverId: receiverIds.length === 1 ? receiverIds[0] : null,
             timestamp: Date.now()
           });
+        } else if (isLucky && gift.hasAnimation !== false) {
+          if (receiverIds.length > 1) {
+            batch.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
+              type: 'gift', 
+              senderId: user!.uid,
+              clientEventId: clientEventId,
+              senderName: user!.displayName || 'مستخدم', 
+              receiverName: 'الجميع', 
+              giftImageUrl: gift.imageUrl, 
+              giftAnimationUrl: gift.link || gift.imageUrl,
+              giftAnimationSize: gift.animationSize || 'normal',
+              giftSize: gift.giftSize || null,
+              giftAudioUrl: gift.audioUrl || null,
+              giftDuration: gift.duration || 3,
+              giftName: gift.name, 
+              giftCategory: 'lucky',
+              giftEffect: 'normal',
+              receiverId: null,
+              timestamp: Date.now()
+            });
+          }
         }
 
         for (let i = 0; i < receiverIds.length; i++) {
@@ -539,7 +589,7 @@ export default function LiveRoom({
               totalWinAmount += winAmount;
             }
 
-            if (gift.hasAnimation !== false) {
+            if (gift.hasAnimation !== false && receiverIds.length === 1) {
               batch.set(doc(collection(db, 'rooms', roomId, 'room_events')), {
                 type: 'gift', 
                 senderId: user!.uid,
@@ -556,7 +606,7 @@ export default function LiveRoom({
                 giftCategory: 'lucky',
                 giftEffect: 'zoom_mic',
                 receiverId: receiverId,
-                timestamp: Date.now() + Math.random() * 500
+                timestamp: Date.now()
               });
             }
           }
