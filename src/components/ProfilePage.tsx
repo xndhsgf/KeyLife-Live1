@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield, Heart, Star, Diamond, Flame } from 'lucide-react';
+import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield, Heart, Star, Diamond, Flame, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -197,6 +197,7 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
                       {userData.specialIdIcon === 'crown' && <Crown size={12} className="text-white" />}
                       {userData.specialIdIcon === 'diamond' && <Diamond size={12} className="text-white" />}
                       {userData.specialIdIcon === 'flame' && <Flame size={12} className="text-white" />}
+                      {userData.specialIdIcon === 'zap' && <Zap size={12} className="text-white" />}
                       <span className="text-xs text-white font-black tracking-wider">{userData.specialId}</span>
                     </div>
                   ) : (

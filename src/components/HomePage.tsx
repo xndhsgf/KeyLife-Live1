@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X, Heart, Fingerprint, Crown, Shield, Star, Diamond } from 'lucide-react';
+import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X, Heart, Fingerprint, Crown, Shield, Star, Diamond, Zap } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,19 +40,22 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
       let color = 'from-gray-400 to-gray-600';
       let icon = 'star';
       
-      if (level >= 50) { digits = 3; color = 'from-red-500 to-rose-600'; icon = 'flame'; }
-      else if (level >= 40) { digits = 4; color = 'from-orange-400 to-red-500'; icon = 'diamond'; }
-      else if (level >= 30) { digits = 5; color = 'from-purple-500 to-pink-500'; icon = 'crown'; }
-      else if (level >= 20) { digits = 6; color = 'from-blue-400 to-indigo-500'; icon = 'shield'; }
+      if (level >= 1000) { digits = 1; color = 'from-yellow-400 to-yellow-600'; icon = 'zap'; }
+      else if (level >= 800) { digits = 2; color = 'from-red-600 to-rose-900'; icon = 'flame'; }
+      else if (level >= 600) { digits = 3; color = 'from-orange-500 to-red-600'; icon = 'diamond'; }
+      else if (level >= 400) { digits = 4; color = 'from-purple-600 to-fuchsia-900'; icon = 'crown'; }
+      else if (level >= 200) { digits = 5; color = 'from-blue-500 to-indigo-700'; icon = 'shield'; }
+      else if (level >= 50) { digits = 6; color = 'from-emerald-500 to-teal-700'; icon = 'star'; }
 
       const generateId = () => {
+        if (digits === 1) return (Math.floor(Math.random() * 9) + 1).toString();
         const min = Math.pow(10, digits - 1);
         const max = Math.pow(10, digits) - 1;
-        return Math.floor(Math.random() * (max - min + 1)) + min;
+        return (Math.floor(Math.random() * (max - min + 1)) + min).toString();
       };
 
       const newIds = Array.from({ length: 6 }, () => ({
-        id: generateId().toString(),
+        id: generateId(),
         color,
         icon,
         price: digits <= 4 ? 5000 : 1000 // Example pricing
@@ -449,6 +452,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                     {searchResult.specialIdIcon === 'crown' && <Crown size={12} className="text-white" />}
                     {searchResult.specialIdIcon === 'diamond' && <Diamond size={12} className="text-white" />}
                     {searchResult.specialIdIcon === 'flame' && <Flame size={12} className="text-white" />}
+                    {searchResult.specialIdIcon === 'zap' && <Zap size={12} className="text-white" />}
                     <span className="text-sm text-white font-black tracking-wider">{searchResult.specialId}</span>
                   </div>
                 ) : (
@@ -510,6 +514,7 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                         {item.icon === 'crown' && <Crown size={24} className="text-white" />}
                         {item.icon === 'diamond' && <Diamond size={24} className="text-white" />}
                         {item.icon === 'flame' && <Flame size={24} className="text-white" />}
+                        {item.icon === 'zap' && <Zap size={24} className="text-white" />}
                       </div>
                       <div>
                         <p className="text-xs text-gray-400 font-bold mb-0.5">آيدي مميز</p>

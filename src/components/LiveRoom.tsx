@@ -2257,6 +2257,7 @@ export default function LiveRoom({
                     {selectedProfile.specialIdIcon === 'crown' && <Crown size={14} className="text-white" />}
                     {selectedProfile.specialIdIcon === 'diamond' && <Diamond size={14} className="text-white" />}
                     {selectedProfile.specialIdIcon === 'flame' && <Flame size={14} className="text-white" />}
+                    {selectedProfile.specialIdIcon === 'zap' && <Zap size={14} className="text-white" />}
                     <span className="text-sm text-white font-black tracking-wider">{selectedProfile.specialId}</span>
                   </div>
                 ) : (

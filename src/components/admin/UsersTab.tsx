@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs, writeBatch } from 'firebase/firestore';
-import { Trash2, Edit2, Coins, Image as ImageIcon, Search, Tag } from 'lucide-react';
+import { Trash2, Edit2, Coins, Image as ImageIcon, Search, Tag, Fingerprint } from 'lucide-react';
 
 export default function UsersTab() {
   const [users, setUsers] = useState<any[]>([]);
@@ -10,6 +10,10 @@ export default function UsersTab() {
   const [coinsAmount, setCoinsAmount] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [idIconUrl, setIdIconUrl] = useState('');
+  const [numericIdInput, setNumericIdInput] = useState('');
+  const [specialIdInput, setSpecialIdInput] = useState('');
+  const [specialIdColorInput, setSpecialIdColorInput] = useState('from-purple-500 to-pink-500');
+  const [specialIdIconInput, setSpecialIdIconInput] = useState('star');
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
@@ -18,6 +22,49 @@ export default function UsersTab() {
     });
     return () => unsub();
   }, []);
+
+  const handleUpdateNumericId = async () => {
+    if (!selectedUser || !numericIdInput) return alert('الرجاء إدخال الآي دي الجديد');
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), { numericId: numericIdInput });
+      setSelectedUser(null);
+      setNumericIdInput('');
+      alert('تم تحديث الآي دي بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  const handleAssignSpecialId = async () => {
+    if (!selectedUser || !specialIdInput) return alert('الرجاء إدخال الآي دي المميز');
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), { 
+        specialId: specialIdInput,
+        specialIdColor: specialIdColorInput,
+        specialIdIcon: specialIdIconInput
+      });
+      setSelectedUser(null);
+      setSpecialIdInput('');
+      alert('تم تعيين الآي دي المميز بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
+
+  const handleRemoveSpecialId = async () => {
+    if (!selectedUser) return;
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.id), { 
+        specialId: null,
+        specialIdColor: null,
+        specialIdIcon: null
+      });
+      setSelectedUser(null);
+      alert('تم إزالة الآي دي المميز بنجاح');
+    } catch (error: any) {
+      alert('خطأ: ' + error.message);
+    }
+  };
 
   const handleUpdateCoins = async (action: 'add' | 'reset') => {
     if (!selectedUser) return;
@@ -58,20 +105,6 @@ export default function UsersTab() {
       await updateDoc(doc(db, 'users', selectedUser.id), { idIcon: idIconUrl });
       alert('تم تحديث أيقونة الـ ID بنجاح');
       setIdIconUrl('');
-      setSelectedUser(null);
-    } catch (error: any) {
-      alert('خطأ: ' + error.message);
-    }
-  };
-
-  const [numericIdInput, setNumericIdInput] = useState('');
-
-  const handleUpdateNumericId = async () => {
-    if (!selectedUser || !numericIdInput) return alert('الرجاء إدخال الآي دي الجديد');
-    try {
-      await updateDoc(doc(db, 'users', selectedUser.id), { numericId: numericIdInput });
-      alert('تم تحديث الآي دي بنجاح');
-      setNumericIdInput('');
       setSelectedUser(null);
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -161,6 +194,9 @@ export default function UsersTab() {
                       <button onClick={() => setSelectedUser({ ...user, action: 'numericId' })} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg" title="تعديل الآي دي">
                         <Edit2 size={18} />
                       </button>
+                      <button onClick={() => setSelectedUser({ ...user, action: 'specialId' })} className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg" title="تعيين آيدي مميز">
+                        <Fingerprint size={18} />
+                      </button>
                       <button onClick={() => setSelectedUser({ ...user, action: 'coins' })} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="تعديل الرصيد">
                         <Coins size={18} />
                       </button>
@@ -186,6 +222,64 @@ export default function UsersTab() {
       </div>
 
       {/* Modals */}
+      {selectedUser && selectedUser.action === 'specialId' && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">تعيين آيدي مميز لـ {selectedUser.displayName}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الآي دي المميز</label>
+                <input
+                  type="text"
+                  value={specialIdInput}
+                  onChange={e => setSpecialIdInput(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl font-mono"
+                  placeholder="مثال: 1 أو 99 أو 777"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">اللون</label>
+                <select 
+                  value={specialIdColorInput} 
+                  onChange={e => setSpecialIdColorInput(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl"
+                >
+                  <option value="from-gray-400 to-gray-600">رمادي (عادي)</option>
+                  <option value="from-emerald-500 to-teal-700">أخضر</option>
+                  <option value="from-blue-500 to-indigo-700">أزرق</option>
+                  <option value="from-purple-600 to-fuchsia-900">بنفسجي</option>
+                  <option value="from-orange-500 to-red-600">برتقالي</option>
+                  <option value="from-red-600 to-rose-900">أحمر</option>
+                  <option value="from-yellow-400 to-yellow-600">ذهبي</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الأيقونة</label>
+                <select 
+                  value={specialIdIconInput} 
+                  onChange={e => setSpecialIdIconInput(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl"
+                >
+                  <option value="star">نجمة</option>
+                  <option value="shield">درع</option>
+                  <option value="crown">تاج</option>
+                  <option value="diamond">ماسة</option>
+                  <option value="flame">شعلة</option>
+                  <option value="zap">برق</option>
+                </select>
+              </div>
+              <button onClick={handleAssignSpecialId} className="w-full bg-pink-600 text-white font-bold py-2 rounded-xl">
+                تعيين الآي دي المميز
+              </button>
+              <button onClick={handleRemoveSpecialId} className="w-full bg-red-100 text-red-600 font-bold py-2 rounded-xl">
+                إزالة الآي دي المميز
+              </button>
+              <button onClick={() => setSelectedUser(null)} className="w-full text-gray-500 py-2">إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedUser && selectedUser.action === 'numericId' && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
