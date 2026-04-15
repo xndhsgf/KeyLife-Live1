@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
-import { Trash2, Plus, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Plus, Link as LinkIcon, Image as ImageIcon, Fingerprint } from 'lucide-react';
 
 export default function BannersTab() {
   const [banners, setBanners] = useState<any[]>([]);
-  const [newBanner, setNewBanner] = useState({ imageUrl: '', linkUrl: '' });
+  const [newBanner, setNewBanner] = useState({ imageUrl: '', linkUrl: '', actionType: 'url' });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -22,10 +22,12 @@ export default function BannersTab() {
     setLoading(true);
     try {
       await addDoc(collection(db, 'banners'), {
-        ...newBanner,
+        imageUrl: newBanner.imageUrl,
+        linkUrl: newBanner.actionType === 'url' ? newBanner.linkUrl : '',
+        actionType: newBanner.actionType,
         createdAt: Date.now()
       });
-      setNewBanner({ imageUrl: '', linkUrl: '' });
+      setNewBanner({ imageUrl: '', linkUrl: '', actionType: 'url' });
       alert('تم إضافة البنر بنجاح');
     } catch (error: any) {
       alert('خطأ: ' + error.message);
@@ -59,19 +61,47 @@ export default function BannersTab() {
               />
             </div>
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">رابط التوجيه (اختياري)</label>
-            <div className="relative">
-              <LinkIcon className="absolute right-3 top-3 text-gray-400" size={20} />
-              <input
-                type="url"
-                value={newBanner.linkUrl}
-                onChange={e => setNewBanner({...newBanner, linkUrl: e.target.value})}
-                className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                placeholder="https://example.com"
-              />
+            <label className="block text-sm font-medium text-gray-700 mb-1">نوع الإجراء عند الضغط</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  checked={newBanner.actionType === 'url'} 
+                  onChange={() => setNewBanner({...newBanner, actionType: 'url'})}
+                  className="text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm text-gray-700">فتح رابط خارجي</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  checked={newBanner.actionType === 'special_ids'} 
+                  onChange={() => setNewBanner({...newBanner, actionType: 'special_ids'})}
+                  className="text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm text-gray-700">فتح متجر الآيديات المميزة</span>
+              </label>
             </div>
           </div>
+
+          {newBanner.actionType === 'url' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">رابط التوجيه (اختياري)</label>
+              <div className="relative">
+                <LinkIcon className="absolute right-3 top-3 text-gray-400" size={20} />
+                <input
+                  type="url"
+                  value={newBanner.linkUrl}
+                  onChange={e => setNewBanner({...newBanner, linkUrl: e.target.value})}
+                  className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="https://example.com"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -90,9 +120,16 @@ export default function BannersTab() {
             <div key={banner.id} className="border border-gray-200 rounded-xl overflow-hidden relative group">
               <img src={banner.imageUrl} alt="Banner" className="w-full h-32 object-cover" />
               <div className="p-3 bg-gray-50 flex justify-between items-center">
-                <a href={banner.linkUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-500 truncate max-w-[200px]">
-                  {banner.linkUrl || 'لا يوجد رابط'}
-                </a>
+                {banner.actionType === 'special_ids' ? (
+                  <span className="text-xs text-purple-600 font-bold flex items-center gap-1">
+                    <Fingerprint size={14} />
+                    متجر الآيديات المميزة
+                  </span>
+                ) : (
+                  <a href={banner.linkUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-500 truncate max-w-[200px]">
+                    {banner.linkUrl || 'لا يوجد رابط'}
+                  </a>
+                )}
                 <button
                   onClick={() => handleDeleteBanner(banner.id)}
                   className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition"

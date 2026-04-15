@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield, Heart } from 'lucide-react';
+import { Settings, Edit, Crown, ShoppingBag, Tag, Wallet, Gamepad2, Briefcase, Award, Video, Image as ImageIcon, TrendingUp, ChevronLeft, LogOut, Check, X, Shield, Heart, Star, Diamond, Flame } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, onSnapshot, updateDoc, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -190,12 +190,23 @@ export default function ProfilePage({ onOpenAdmin }: { onOpenAdmin?: () => void 
               <>
                 <h1 className="text-xl font-bold text-gray-800">{user?.displayName || 'مستخدم جديد'}</h1>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="relative h-6 px-3 flex items-center justify-center overflow-hidden rounded-md border border-gray-200">
-                    {(userData?.idIcon || appIcons.idIcon) && (
-                      <img src={userData?.idIcon || appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" alt="ID Background" />
-                    )}
-                    <span className="relative z-10 text-xs text-gray-700 font-mono font-bold">ID: {userData?.numericId || '123456789'}</span>
-                  </div>
+                  {userData?.specialId ? (
+                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${userData.specialIdColor || 'from-purple-500 to-pink-500'} shadow-sm`}>
+                      {userData.specialIdIcon === 'star' && <Star size={12} className="text-white" />}
+                      {userData.specialIdIcon === 'shield' && <Shield size={12} className="text-white" />}
+                      {userData.specialIdIcon === 'crown' && <Crown size={12} className="text-white" />}
+                      {userData.specialIdIcon === 'diamond' && <Diamond size={12} className="text-white" />}
+                      {userData.specialIdIcon === 'flame' && <Flame size={12} className="text-white" />}
+                      <span className="text-xs text-white font-black tracking-wider">{userData.specialId}</span>
+                    </div>
+                  ) : (
+                    <div className="relative h-6 px-3 flex items-center justify-center overflow-hidden rounded-md border border-gray-200">
+                      {(userData?.idIcon || appIcons.idIcon) && (
+                        <img src={userData?.idIcon || appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" alt="ID Background" />
+                      )}
+                      <span className="relative z-10 text-xs text-gray-700 font-mono font-bold">ID: {userData?.numericId || '123456789'}</span>
+                    </div>
+                  )}
                   <button className="text-purple-600 text-[10px] bg-purple-50 px-1.5 py-0.5 rounded">نسخ</button>
                 </div>
                 <div className="flex gap-2 mt-2">

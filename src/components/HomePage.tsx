@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X, Heart } from 'lucide-react';
+import { Search, Bell, Flame, Users, MapPin, Radio, Mic, X, Heart, Fingerprint, Crown, Shield, Star, Diamond } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { registerBackHandler, unregisterBackHandler } from '../hooks/useBackButton';
+import { calculateLevel } from '../lib/levels';
 
 export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => void }) {
   const { user } = useAuth();
@@ -13,10 +14,52 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [showCPModal, setShowCPModal] = useState(false);
+  const [showSpecialIdsModal, setShowSpecialIdsModal] = useState(false);
   const [topSupporters, setTopSupporters] = useState<any[]>([]);
   const [cpList, setCpList] = useState<any[]>([]);
   const [appName, setAppName] = useState('Cocco');
   const [navIcons, setNavIcons] = useState<any>({});
+  const [userData, setUserData] = useState<any>(null);
+  const [specialIdsList, setSpecialIdsList] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+      if (doc.exists()) {
+        setUserData(doc.data());
+      }
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Generate random special IDs based on user level
+  useEffect(() => {
+    if (showSpecialIdsModal && userData) {
+      const level = calculateLevel(userData.totalSupport || 0, userData.diamonds || 0);
+      let digits = 7;
+      let color = 'from-gray-400 to-gray-600';
+      let icon = 'star';
+      
+      if (level >= 50) { digits = 3; color = 'from-red-500 to-rose-600'; icon = 'flame'; }
+      else if (level >= 40) { digits = 4; color = 'from-orange-400 to-red-500'; icon = 'diamond'; }
+      else if (level >= 30) { digits = 5; color = 'from-purple-500 to-pink-500'; icon = 'crown'; }
+      else if (level >= 20) { digits = 6; color = 'from-blue-400 to-indigo-500'; icon = 'shield'; }
+
+      const generateId = () => {
+        const min = Math.pow(10, digits - 1);
+        const max = Math.pow(10, digits) - 1;
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      };
+
+      const newIds = Array.from({ length: 6 }, () => ({
+        id: generateId().toString(),
+        color,
+        icon,
+        price: digits <= 4 ? 5000 : 1000 // Example pricing
+      }));
+      setSpecialIdsList(newIds);
+    }
+  }, [showSpecialIdsModal, userData]);
   
   const [rankingBackgrounds, setRankingBackgrounds] = useState<any>({});
 
@@ -155,15 +198,19 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
         {banners.length > 0 ? (
           <div className="relative w-full h-32 rounded-xl overflow-hidden shadow-md">
             {banners.map((banner, idx) => (
-              <a 
+              <div 
                 key={banner.id} 
-                href={banner.linkUrl || '#'} 
-                target={banner.linkUrl ? "_blank" : "_self"}
-                rel="noreferrer"
-                className={`absolute inset-0 transition-opacity duration-500 ${idx === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                onClick={() => {
+                  if (banner.actionType === 'special_ids') {
+                    setShowSpecialIdsModal(true);
+                  } else if (banner.linkUrl) {
+                    window.open(banner.linkUrl, '_blank');
+                  }
+                }}
+                className={`absolute inset-0 transition-opacity duration-500 cursor-pointer ${idx === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
               >
                 <img src={banner.imageUrl || undefined} alt="Banner" className="w-full h-full object-cover" />
-              </a>
+              </div>
             ))}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1 z-20">
               {banners.map((_, idx) => (
@@ -395,7 +442,18 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                   )}
                 </div>
                 <h3 className="text-xl font-bold text-gray-800 mb-1">{searchResult.displayName || 'مستخدم'}</h3>
-                <p className="text-sm text-gray-500 font-mono mb-4">ID: {searchResult.numericId}</p>
+                {searchResult.specialId ? (
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r ${searchResult.specialIdColor || 'from-purple-500 to-pink-500'} mb-4 shadow-sm`}>
+                    {searchResult.specialIdIcon === 'star' && <Star size={12} className="text-white" />}
+                    {searchResult.specialIdIcon === 'shield' && <Shield size={12} className="text-white" />}
+                    {searchResult.specialIdIcon === 'crown' && <Crown size={12} className="text-white" />}
+                    {searchResult.specialIdIcon === 'diamond' && <Diamond size={12} className="text-white" />}
+                    {searchResult.specialIdIcon === 'flame' && <Flame size={12} className="text-white" />}
+                    <span className="text-sm text-white font-black tracking-wider">{searchResult.specialId}</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 font-mono mb-4">ID: {searchResult.numericId}</p>
+                )}
                 
                 <div className="flex gap-4 w-full">
                   <div className="flex-1 bg-purple-50 rounded-xl p-3 text-center">
@@ -414,6 +472,85 @@ export default function HomePage({ onOpenRoom }: { onOpenRoom: (id?: string) => 
                 <p>أدخل الآي دي للبحث عن مستخدم</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Special IDs Modal */}
+      {showSpecialIdsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl relative">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-6 text-center relative">
+              <button 
+                onClick={() => setShowSpecialIdsModal(false)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/20 p-1.5 rounded-full"
+              >
+                <X size={20} />
+              </button>
+              <Fingerprint size={48} className="text-white mx-auto mb-3 opacity-90" />
+              <h2 className="text-2xl font-black text-white mb-1">متجر الآيديات المميزة</h2>
+              <p className="text-purple-100 text-sm">ارتقِ بمستواك لتحصل على آيدي أقصر وأميز!</p>
+            </div>
+
+            <div className="p-6 bg-gray-50">
+              <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <span className="text-sm font-bold text-gray-700">مستواك الحالي:</span>
+                <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-lg font-black text-sm">
+                  {calculateLevel(userData?.totalSupport || 0, userData?.diamonds || 0)}
+                </span>
+              </div>
+
+              <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1 hide-scrollbar">
+                {specialIdsList.map((item, idx) => (
+                  <div key={idx} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between group hover:border-purple-300 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-inner`}>
+                        {item.icon === 'star' && <Star size={24} className="text-white" />}
+                        {item.icon === 'shield' && <Shield size={24} className="text-white" />}
+                        {item.icon === 'crown' && <Crown size={24} className="text-white" />}
+                        {item.icon === 'diamond' && <Diamond size={24} className="text-white" />}
+                        {item.icon === 'flame' && <Flame size={24} className="text-white" />}
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 font-bold mb-0.5">آيدي مميز</p>
+                        <p className={`text-xl font-black bg-clip-text text-transparent bg-gradient-to-r ${item.color}`}>
+                          {item.id}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        if (window.confirm(`هل تريد شراء الآيدي ${item.id} مقابل ${item.price} ماسة؟`)) {
+                          if ((userData?.diamonds || 0) < item.price) {
+                            alert('رصيدك من الألماس لا يكفي');
+                            return;
+                          }
+                          try {
+                            await updateDoc(doc(db, 'users', user!.uid), {
+                              specialId: item.id,
+                              specialIdColor: item.color,
+                              specialIdIcon: item.icon,
+                              diamonds: (userData?.diamonds || 0) - item.price
+                            });
+                            alert('تم شراء وتعيين الآيدي المميز بنجاح!');
+                            setShowSpecialIdsModal(false);
+                          } catch (err) {
+                            console.error(err);
+                            alert('حدث خطأ أثناء الشراء');
+                          }
+                        }
+                      }}
+                      className="bg-gray-100 hover:bg-purple-50 text-purple-600 font-bold py-2 px-4 rounded-xl transition-colors text-sm flex flex-col items-center"
+                    >
+                      <span>شراء</span>
+                      <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                        {item.price} <Diamond size={8} className="text-blue-400" />
+                      </span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

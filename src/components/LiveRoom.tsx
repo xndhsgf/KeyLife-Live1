@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Users, Gift, Mic, MicOff, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3 } from 'lucide-react';
+import { X, Users, Gift, Mic, MicOff, MessageCircle, Smile, MoreHorizontal, Crown, Star, Music, ShieldBan, Settings, ShoppingBag, Image as ImageIcon, Send, Check, TrendingUp, Diamond, User, ShieldAlert, Heart, Gamepad2, Zap, Edit3, Shield, Flame } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../firebase';
 import { collection, doc, onSnapshot, updateDoc, getDoc, addDoc, query, orderBy, limit, runTransaction, setDoc, increment, deleteDoc, where, getDocs, writeBatch } from 'firebase/firestore';
@@ -373,6 +373,9 @@ export default function LiveRoom({
           totalSpent: userData.totalSpent || 0,
           totalSupport: userData.totalSupport || 0,
           numericId: userData.numericId,
+          specialId: userData.specialId,
+          specialIdColor: userData.specialIdColor,
+          specialIdIcon: userData.specialIdIcon,
           badges: userData.badges || [],
           cpPartnerId: userData.cpPartnerId,
           cpPartnerName: userData.cpPartnerName,
@@ -1175,6 +1178,9 @@ export default function LiveRoom({
                         totalSpent: userData.totalSpent || 0,
                         totalSupport: userData.totalSupport || 0,
                         numericId: userData.numericId,
+                        specialId: userData.specialId,
+                        specialIdColor: userData.specialIdColor,
+                        specialIdIcon: userData.specialIdIcon,
                         badges: userData.badges || [],
                         cpPartnerId: userData.cpPartnerId,
                         cpPartnerName: userData.cpPartnerName,
@@ -1347,6 +1353,9 @@ export default function LiveRoom({
                   totalSpent: userData.totalSpent || 0,
                   totalSupport: userData.totalSupport || 0,
                   numericId: userData.numericId,
+                  specialId: userData.specialId,
+                  specialIdColor: userData.specialIdColor,
+                  specialIdIcon: userData.specialIdIcon,
                   badges: userData.badges || [],
                   cpPartnerId: userData.cpPartnerId,
                   cpPartnerName: userData.cpPartnerName,
@@ -2241,14 +2250,25 @@ export default function LiveRoom({
                 </div>
                 <h3 className="text-xl font-bold text-white mt-2">{selectedProfile.name}</h3>
                 
-                <div className="mt-2 relative h-8 px-6 flex items-center justify-center overflow-hidden rounded-lg border border-white/10 group">
-                  {appIcons.idIcon && (
-                    <img src={appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" />
-                  )}
-                  <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">
-                    ID: {selectedProfile.numericId || selectedProfile.uid.substring(0,8)}
-                  </span>
-                </div>
+                {selectedProfile.specialId ? (
+                  <div className={`mt-2 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r ${selectedProfile.specialIdColor || 'from-purple-500 to-pink-500'} shadow-lg border border-white/20`}>
+                    {selectedProfile.specialIdIcon === 'star' && <Star size={14} className="text-white" />}
+                    {selectedProfile.specialIdIcon === 'shield' && <Shield size={14} className="text-white" />}
+                    {selectedProfile.specialIdIcon === 'crown' && <Crown size={14} className="text-white" />}
+                    {selectedProfile.specialIdIcon === 'diamond' && <Diamond size={14} className="text-white" />}
+                    {selectedProfile.specialIdIcon === 'flame' && <Flame size={14} className="text-white" />}
+                    <span className="text-sm text-white font-black tracking-wider">{selectedProfile.specialId}</span>
+                  </div>
+                ) : (
+                  <div className="mt-2 relative h-8 px-6 flex items-center justify-center overflow-hidden rounded-lg border border-white/10 group">
+                    {appIcons.idIcon && (
+                      <img src={appIcons.idIcon || undefined} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                    )}
+                    <span className="relative z-10 text-white text-xs font-mono font-bold tracking-wider">
+                      ID: {selectedProfile.numericId || selectedProfile.uid.substring(0,8)}
+                    </span>
+                  </div>
+                )}
               </div>
               
               <div className="flex justify-center gap-4 mb-6">
